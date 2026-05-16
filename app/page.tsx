@@ -12,6 +12,7 @@ export default function Home() {
   const [preview, setPreview] = useState<string | null>(null);
   const [loadingMessage, setLoadingMessage] = useState('Reading your ERD diagram...');
   const [progress, setProgress] = useState(0);
+  const [dbType, setDbType] = useState<'postgresql' | 'mysql' | 'sqlite'>('postgresql');
 
   useEffect(() => {
     if (!isUploading) {
@@ -73,6 +74,7 @@ export default function Home() {
       // Create form data
       const formData = new FormData();
       formData.append('image', file);
+      formData.append('dbType', dbType);
 
       // Upload to API
       const response = await fetch('/api/generate', {
@@ -136,6 +138,26 @@ export default function Home() {
               Upload your Entity Relationship Diagram and let AI generate Prisma schemas 
               and Next.js API routes automatically.
             </p>
+          </div>
+
+          {/* Database Type Selector */}
+          <div className="mb-6">
+            <p className="text-sm text-gray-400 mb-3 text-center">Select Database Type</p>
+            <div className="flex justify-center gap-3">
+              {(['postgresql', 'mysql', 'sqlite'] as const).map((db) => (
+                <button
+                  key={db}
+                  onClick={() => setDbType(db)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                    dbType === db
+                      ? 'bg-blue-500 border-blue-500 text-white'
+                      : 'border-gray-600 text-gray-400 hover:border-gray-400'
+                  }`}
+                >
+                  {db === 'postgresql' ? '🐘 PostgreSQL' : db === 'mysql' ? '🐬 MySQL' : '🪶 SQLite'}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Upload Zone */}

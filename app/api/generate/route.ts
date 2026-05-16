@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     // Parse multipart form data
     const formData = await request.formData();
     const file = formData.get('image') as File;
+    const dbType = formData.get('dbType') as string || 'postgresql';
 
     if (!file) {
       return NextResponse.json(
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Analyze ERD using watsonx.ai
-    const result = await analyzeERD(buffer);
+    const result = await analyzeERD(buffer, dbType);
 
     return NextResponse.json({
       success: true,

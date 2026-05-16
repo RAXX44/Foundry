@@ -17,7 +17,7 @@ export interface ERDAnalysisResult {
 /**
  * Build the system prompt for ERD analysis
  */
-function buildSystemPrompt(): string {
+function buildSystemPrompt(dbType: string): string {
   return `You are an expert database architect and code generator.
 Analyze the provided ERD (Entity Relationship Diagram) image and generate two things:
 
@@ -31,7 +31,10 @@ CRITICAL INSTRUCTIONS:
 - Both values must be complete, production-ready code as strings
 
 PRISMA SCHEMA REQUIREMENTS:
-- Include datasource block with PostgreSQL provider
+- Include datasource block with "${dbType}" as the database provider
+- For sqlite, use: url = "file:./dev.db" instead of env("DATABASE_URL")
+- For mysql, use: provider = "mysql" and url = env("DATABASE_URL")
+- For postgresql, use: provider = "postgresql" and url = env("DATABASE_URL")
 - Include generator block for Prisma Client
 - Create models for all entities detected in the ERD
 - Include all fields with correct Prisma types (String, Int, Float, Boolean, DateTime, Json)
@@ -87,7 +90,7 @@ Now analyze the ERD image and return the JSON response with ALL THREE keys (pris
 /**
  * Analyze an ERD image using watsonx.ai vision model
  */
-export async function analyzeERD(imageBuffer: Buffer): Promise<ERDAnalysisResult> {
+export async function analyzeERD(imageBuffer: Buffer, dbType: string = 'postgresql'): Promise<ERDAnalysisResult> {
   try {
     const apiKey = process.env.WATSONX_API_KEY!;
     const url = process.env.WATSONX_URL || 'https://us-south.ml.cloud.ibm.com';
@@ -108,7 +111,7 @@ export async function analyzeERD(imageBuffer: Buffer): Promise<ERDAnalysisResult
     // 2. Siapkan Gambar dan Prompt
     const base64Image = imageBuffer.toString('base64');
     const imageDataUrl = `data:image/png;base64,${base64Image}`;
-    const systemPrompt = buildSystemPrompt();
+    const systemPrompt = buildSystemPrompt(dbType);
 
     // 3. Panggil WatsonX REST API dengan Format Multimodal (Chat)
     const chatRes = await fetch(`${url}/ml/v1/text/chat?version=2024-05-31`, {
