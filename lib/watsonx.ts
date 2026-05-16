@@ -11,6 +11,7 @@
 export interface ERDAnalysisResult {
   prismaSchema: string;
   apiRoutes: string;
+  mermaidDiagram: string;
 }
 
 /**
@@ -67,13 +68,20 @@ API ROUTES REQUIREMENTS:
 - Return proper HTTP status codes
 - Include proper imports (NextResponse, prisma)
 
-EXAMPLE CORRECT SCHEMA:
+MERMAID DIAGRAM REQUIREMENTS:
+- Generate a valid Mermaid erDiagram syntax representing the database structure
+- Use proper Mermaid relationship syntax: ||--o{, }o--||, ||--||, etc.
+- Include all entities and their relationships
+- Format: erDiagram\\n  ENTITY1 ||--o{ ENTITY2 : "relationship"
+
+EXAMPLE CORRECT RESPONSE (must have THREE keys):
 {
   "prismaSchema": "datasource db {\\n  provider = \\"postgresql\\"\\n  url = env(\\"DATABASE_URL\\")\\n}\\n\\ngenerator client {\\n  provider = \\"prisma-client-js\\"\\n}\\n\\nmodel Student {\\n  id        Int      @id @default(autoincrement())\\n  name      String\\n  email     String   @unique\\n  marks     Mark[]\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}\\n\\nmodel Teacher {\\n  id        Int      @id @default(autoincrement())\\n  name      String\\n  subject   String\\n  marks     Mark[]\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}\\n\\nmodel Mark {\\n  id        Int      @id @default(autoincrement())\\n  score     Int\\n  studentId Int\\n  student   Student  @relation(fields: [studentId], references: [id])\\n  teacherId Int\\n  teacher   Teacher  @relation(fields: [teacherId], references: [id])\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}",
-  "apiRoutes": "import { NextResponse } from 'next/server';\\nimport { prisma } from '@/lib/prisma';\\n\\n// GET /api/students\\nexport async function GET() {\\n  try {\\n    const students = await prisma.student.findMany({ include: { marks: true } });\\n    return NextResponse.json(students);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 });\\n  }\\n}\\n\\n// POST /api/students\\nexport async function POST(request: Request) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.create({ data: body });\\n    return NextResponse.json(student, { status: 201 });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to create student' }, { status: 500 });\\n  }\\n}\\n\\n// PUT /api/students/[id]\\nexport async function PUT(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.update({ where: { id: parseInt(params.id) }, data: body });\\n    return NextResponse.json(student);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to update student' }, { status: 500 });\\n  }\\n}\\n\\n// DELETE /api/students/[id]\\nexport async function DELETE(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    await prisma.student.delete({ where: { id: parseInt(params.id) } });\\n    return NextResponse.json({ success: true });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to delete student' }, { status: 500 });\\n  }\\n}"
+  "apiRoutes": "import { NextResponse } from 'next/server';\\nimport { prisma } from '@/lib/prisma';\\n\\n// GET /api/students\\nexport async function GET() {\\n  try {\\n    const students = await prisma.student.findMany({ include: { marks: true } });\\n    return NextResponse.json(students);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 });\\n  }\\n}\\n\\n// POST /api/students\\nexport async function POST(request: Request) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.create({ data: body });\\n    return NextResponse.json(student, { status: 201 });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to create student' }, { status: 500 });\\n  }\\n}\\n\\n// PUT /api/students/[id]\\nexport async function PUT(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.update({ where: { id: parseInt(params.id) }, data: body });\\n    return NextResponse.json(student);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to update student' }, { status: 500 });\\n  }\\n}\\n\\n// DELETE /api/students/[id]\\nexport async function DELETE(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    await prisma.student.delete({ where: { id: parseInt(params.id) } });\\n    return NextResponse.json({ success: true });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to delete student' }, { status: 500 });\\n  }\\n}",
+  "mermaidDiagram": "erDiagram\\n  Student ||--o{ Mark : has\\n  Teacher ||--o{ Mark : grades\\n  Student {\\n    int id PK\\n    string name\\n    string email\\n    datetime createdAt\\n    datetime updatedAt\\n  }\\n  Teacher {\\n    int id PK\\n    string name\\n    string subject\\n    datetime createdAt\\n    datetime updatedAt\\n  }\\n  Mark {\\n    int id PK\\n    int score\\n    int studentId FK\\n    int teacherId FK\\n    datetime createdAt\\n    datetime updatedAt\\n  }"
 }
 
-Now analyze the ERD image and return the JSON response following ALL the rules above.`;
+Now analyze the ERD image and return the JSON response with ALL THREE keys (prismaSchema, apiRoutes, mermaidDiagram) following ALL the rules above.`;
 }
 
 /**
@@ -180,7 +188,8 @@ export async function analyzeERD(imageBuffer: Buffer): Promise<ERDAnalysisResult
 
         parsedResult = {
           prismaSchema: prismaMatch ? prismaMatch[1] || prismaMatch[0] : '// Could not extract Prisma schema',
-          apiRoutes: tsMatch ? tsMatch[1] || tsMatch[0] : '// Could not extract API routes'
+          apiRoutes: tsMatch ? tsMatch[1] || tsMatch[0] : '// Could not extract API routes',
+          mermaidDiagram: ''
         };
       }
     }
@@ -188,6 +197,11 @@ export async function analyzeERD(imageBuffer: Buffer): Promise<ERDAnalysisResult
     // Validate response structure
     if (!parsedResult.prismaSchema || !parsedResult.apiRoutes) {
       throw new Error('Invalid response structure from AI model - missing prismaSchema or apiRoutes');
+    }
+    
+    // Set default mermaidDiagram if missing
+    if (!parsedResult.mermaidDiagram) {
+      parsedResult.mermaidDiagram = '';
     }
 
     // Clean up any remaining markdown artifacts

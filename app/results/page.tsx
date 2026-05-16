@@ -8,6 +8,7 @@ import { Download, ArrowLeft, Copy, Check } from 'lucide-react';
 interface GeneratedCode {
   prismaSchema: string;
   apiRoutes: string;
+  mermaidDiagram: string;
 }
 
 export default function ResultsPage() {
@@ -15,6 +16,7 @@ export default function ResultsPage() {
   const [code, setCode] = useState<GeneratedCode>({
     prismaSchema: '',
     apiRoutes: '',
+    mermaidDiagram: '',
   });
   const [activeTab, setActiveTab] = useState<'schema' | 'routes'>('schema');
   const [copied, setCopied] = useState(false);
@@ -32,6 +34,7 @@ export default function ResultsPage() {
       setCode({
         prismaSchema: results.prismaSchema || '// Schema will be generated here',
         apiRoutes: results.apiRoutes || '// API routes will be generated here',
+        mermaidDiagram: results.mermaidDiagram || '',
       });
     } catch (error) {
       console.error('Failed to parse results:', error);
@@ -220,6 +223,30 @@ export default function ResultsPage() {
                 }}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Mermaid Diagram Section */}
+        <div className="mt-8 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span>🔮</span>
+            <span>Live ERD Diagram</span>
+          </h3>
+          <div className="flex justify-center bg-white p-6 rounded-lg overflow-auto max-h-96">
+            {code.mermaidDiagram ? (
+              <img
+                src={`https://mermaid.ink/img/${btoa(code.mermaidDiagram)}`}
+                alt="Generated ERD"
+                className="max-w-full h-auto"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <p className={`text-gray-500 ${code.mermaidDiagram ? 'hidden' : ''}`}>
+              No diagram available.
+            </p>
           </div>
         </div>
 

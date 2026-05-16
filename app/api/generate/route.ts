@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       success: true,
       prismaSchema: result.prismaSchema,
       apiRoutes: result.apiRoutes,
+      mermaidDiagram: result.mermaidDiagram,
     });
 
   } catch (error) {
