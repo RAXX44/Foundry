@@ -1,10 +1,7 @@
 <div align="center">
 
 <img src="Banner.png" alt="Foundry" width="700" />
-
 <br />
-
-# 🏗️ Foundry
 
 ### Transform ERD Diagrams into Production-Ready Backend Code — in 60 Seconds
 
