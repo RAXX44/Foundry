@@ -208,7 +208,7 @@ volumes:
     <main className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <button
               onClick={() => router.push('/')}
@@ -428,12 +428,12 @@ volumes:
         </div>
 
         {/* Mermaid Diagram Section */}
-        <div className="mt-8 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+        <div className="mt-10 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <span>🔮</span>
             <span>Live ERD Diagram {modelNames.length > 0 ? `(${modelNames.length} models detected)` : ''}</span>
           </h3>
-          <div className="flex justify-center bg-white p-6 rounded-lg overflow-auto max-h-[500px]">
+          <div className="flex justify-center bg-white p-6 rounded-xl overflow-auto max-h-[700px] w-full">
             {code.mermaidDiagram ? (
               <img
                 src={`https://mermaid.ink/img/${btoa(code.mermaidDiagram)}`}
@@ -452,35 +452,32 @@ volumes:
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 space-y-3">
+        <div className="mt-10 mb-16 space-y-4">
           {/* Primary Actions */}
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center gap-6">
             <button
               onClick={handleDownloadAll}
-              className="px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+              className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold text-base hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-3"
             >
               <span>📦</span> Download All Files (.zip)
             </button>
             <button
               onClick={() => router.push('/')}
-              className="px-8 py-3 bg-gray-700 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="px-10 py-4 bg-gray-700 text-white rounded-xl font-semibold text-base hover:bg-gray-600 transition-colors flex items-center gap-3"
             >
               <span>🔄</span> Generate Another
             </button>
           </div>
-          {/* Coming Soon Actions */}
-          <div className="flex justify-center gap-3">
-            <button disabled className="px-5 py-2 bg-gray-800/50 text-gray-600 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
-              <span>🚀</span> Deploy to Neon
-              <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-500">Coming Soon</span>
+          {/* Coming Soon */}
+          <div className="flex justify-center gap-4 pb-8">
+            <button disabled className="px-6 py-2.5 bg-gray-800/50 text-gray-500 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
+              🚀 Deploy to Neon <span className="text-xs bg-gray-700/80 px-2 py-0.5 rounded-full">Coming Soon</span>
             </button>
-            <button disabled className="px-5 py-2 bg-gray-800/50 text-gray-600 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
-              <span>🐙</span> Push to GitHub
-              <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-500">Coming Soon</span>
+            <button disabled className="px-6 py-2.5 bg-gray-800/50 text-gray-500 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
+              🐙 Push to GitHub <span className="text-xs bg-gray-700/80 px-2 py-0.5 rounded-full">Coming Soon</span>
             </button>
-            <button disabled className="px-5 py-2 bg-gray-800/50 text-gray-600 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
-              <span>🐳</span> Docker Deploy
-              <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-500">Coming Soon</span>
+            <button disabled className="px-6 py-2.5 bg-gray-800/50 text-gray-500 rounded-lg text-sm border border-gray-700/50 cursor-not-allowed flex items-center gap-2">
+              🐳 Docker Deploy <span className="text-xs bg-gray-700/80 px-2 py-0.5 rounded-full">Coming Soon</span>
             </button>
           </div>
         </div>

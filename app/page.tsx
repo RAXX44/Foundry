@@ -123,6 +123,18 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Stats Bar */}
+      <div className="bg-gray-800/30 border-b border-gray-800">
+        <div className="container mx-auto px-4 py-2 flex justify-center gap-8">
+          <span className="text-sm text-gray-300 font-medium flex items-center gap-1">
+            <span className="text-green-400">●</span> Powered by IBM watsonx.ai
+          </span>
+          <span className="text-sm text-gray-300 font-medium">⚡ Generate in ~60 seconds</span>
+          <span className="text-sm text-gray-300 font-medium">📦 9 files generated</span>
+          <span className="text-sm text-gray-300 font-medium">🗄️ PostgreSQL • MySQL • SQLite</span>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
@@ -135,8 +147,7 @@ export default function Home() {
               </span>
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Upload your Entity Relationship Diagram and let AI generate Prisma schemas 
-              and Next.js API routes automatically.
+              Upload any ERD image and Foundry instantly generates a complete backend starter kit — Prisma schema, API routes, Docker config, and more. Powered by IBM watsonx.ai vision model.
             </p>
           </div>
 
@@ -255,9 +266,9 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">AI-Powered</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">AI Vision Engine</h3>
               <p className="text-sm text-gray-400">
-                Uses watsonx.ai vision model to accurately detect entities and relationships
+                IBM watsonx.ai Llama 3.2 Vision reads your ERD and understands every entity, relationship, and constraint.
               </p>
             </div>
 
@@ -267,9 +278,9 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Production Ready</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">9-File Starter Kit</h3>
               <p className="text-sm text-gray-400">
-                Generates complete Prisma schemas and Next.js API routes with CRUD operations
+                Get schema, API routes, Docker config, TypeScript types, and more — all in one ZIP download.
               </p>
             </div>
 
@@ -279,10 +290,36 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Save Time</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">From Image to Code</h3>
               <p className="text-sm text-gray-400">
-                Skip manual schema writing and focus on building your application
+                What takes hours manually is done in ~60 seconds. Focus on building features, not boilerplate.
               </p>
+            </div>
+          </div>
+
+          {/* How it works */}
+          <div className="mt-12 text-center">
+            <h3 className="text-lg font-semibold text-gray-300 mb-6">How it works</h3>
+            <div className="flex justify-center items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center text-blue-400 font-bold">1</span>
+                Upload ERD Image
+              </div>
+              <span className="text-gray-600">→</span>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 font-bold">2</span>
+                AI Analyzes Diagram
+              </div>
+              <span className="text-gray-600">→</span>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 font-bold">3</span>
+                Select Database Type
+              </div>
+              <span className="text-gray-600">→</span>
+              <div className="flex items-center gap-2 text-sm text-gray-400">
+                <span className="w-8 h-8 bg-orange-500/20 rounded-full flex items-center justify-center text-orange-400 font-bold">4</span>
+                Download 9-File Bundle
+              </div>
             </div>
           </div>
         </div>
@@ -292,7 +329,7 @@ export default function Home() {
       <footer className="border-t border-gray-800 mt-16">
         <div className="container mx-auto px-4 py-8">
           <p className="text-center text-sm text-gray-500">
-            Built with Next.js 14, watsonx.ai, and Prisma
+            Foundry © 2026 — Built with ❤️ using IBM Bob, Next.js 14, and IBM watsonx.ai
           </p>
         </div>
       </footer>
