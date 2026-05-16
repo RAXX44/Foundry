@@ -61,6 +61,32 @@ export default function ResultsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadAll = () => {
+    // Download schema.prisma
+    const prismaBlob = new Blob([code.prismaSchema], { type: 'text/plain' });
+    const prismaUrl = URL.createObjectURL(prismaBlob);
+    const prismaLink = document.createElement('a');
+    prismaLink.href = prismaUrl;
+    prismaLink.download = 'schema.prisma';
+    document.body.appendChild(prismaLink);
+    prismaLink.click();
+    document.body.removeChild(prismaLink);
+    URL.revokeObjectURL(prismaUrl);
+
+    // Download routes.ts after short delay
+    setTimeout(() => {
+      const apiBlob = new Blob([code.apiRoutes], { type: 'text/plain' });
+      const apiUrl = URL.createObjectURL(apiBlob);
+      const apiLink = document.createElement('a');
+      apiLink.href = apiUrl;
+      apiLink.download = 'routes.ts';
+      document.body.appendChild(apiLink);
+      apiLink.click();
+      document.body.removeChild(apiLink);
+      URL.revokeObjectURL(apiUrl);
+    }, 500);
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header */}
@@ -251,12 +277,9 @@ export default function ResultsPage() {
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-6 flex justify-center gap-4">
+        <div className="mt-6 flex flex-wrap justify-center gap-4">
           <button
-            onClick={() => {
-              // Download both files as a zip would go here
-              handleDownload();
-            }}
+            onClick={handleDownloadAll}
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
           >
             Download All Files
@@ -266,6 +289,18 @@ export default function ResultsPage() {
             className="px-6 py-3 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
           >
             Generate Another
+          </button>
+          <button
+            disabled
+            className="px-6 py-3 bg-gray-800 text-gray-500 rounded-lg font-medium border border-gray-700 cursor-not-allowed flex items-center gap-2"
+          >
+            <span>🚀</span> Deploy to Neon <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full">Soon</span>
+          </button>
+          <button
+            disabled
+            className="px-6 py-3 bg-gray-800 text-gray-500 rounded-lg font-medium border border-gray-700 cursor-not-allowed flex items-center gap-2"
+          >
+            <span>📦</span> Push to GitHub <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full">Soon</span>
           </button>
         </div>
       </div>

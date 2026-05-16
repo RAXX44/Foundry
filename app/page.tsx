@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Loader2, FileImage } from 'lucide-react';
@@ -10,6 +10,41 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [loadingMessage, setLoadingMessage] = useState('Reading your ERD diagram...');
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!isUploading) {
+      setProgress(0);
+      return;
+    }
+
+    const messages = [
+      'Reading your ERD diagram...',
+      'Detecting entities and relationships...',
+      'Analyzing table structures...',
+      'Mapping foreign key relationships...',
+      'Generating Prisma schema...',
+      'Building API routes with CRUD...',
+      'Creating Mermaid diagram...',
+      'Almost done, finalizing output...',
+    ];
+
+    let index = 0;
+    const messageInterval = setInterval(() => {
+      index = (index + 1) % messages.length;
+      setLoadingMessage(messages[index]);
+    }, 7000);
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => Math.min(prev + 1.5, 90));
+    }, 1000);
+
+    return () => {
+      clearInterval(messageInterval);
+      clearInterval(progressInterval);
+    };
+  }, [isUploading]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -145,11 +180,20 @@ export default function Home() {
                       <Loader2 className="w-16 h-16 text-blue-500 animate-spin" />
                       <div className="space-y-2">
                         <p className="text-lg font-medium text-white">
-                          Analyzing your ERD...
+                          {loadingMessage}
                         </p>
                         <p className="text-sm text-gray-400">
                           This may take a few moments
                         </p>
+                      </div>
+                      <div className="w-full max-w-xs mx-auto mt-4 space-y-2">
+                        <div className="w-full bg-gray-700 rounded-full h-1.5">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 to-purple-600 h-1.5 rounded-full transition-all duration-1000"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500 text-center">{progress.toFixed(0)}% complete</p>
                       </div>
                     </>
                   ) : (
