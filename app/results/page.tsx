@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Editor from '@monaco-editor/react';
 import { Download, ArrowLeft, Copy, Check, FileImage, ChevronDown } from 'lucide-react';
+import Image from 'next/image';
+
 
 interface GeneratedCode {
   prismaSchema: string;
@@ -445,96 +447,180 @@ ${endpointsList}
   return (
     <div className="min-h-screen bg-[#0d0d0f] flex flex-col">
 
-      {/* Header — Download ZIP removed, lives in Quick Actions */}
-      <header className="flex-shrink-0 border-b border-white/5 bg-[#0d0d0f]/90 backdrop-blur-xl z-10">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
+  {/* Header */}
+  <header className="flex-shrink-0 border-b border-white/10 bg-black/40 backdrop-blur-2xl z-10 relative overflow-hidden">
 
+    {/* Gradient Overlay */}
+    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+
+    <div className="container mx-auto px-6 py-4 flex items-center justify-between relative z-10">
+
+      {/* Back Button */}
+      <button
+        onClick={() => router.push('/')}
+        className="flex items-center gap-2 text-gray-500 hover:text-white transition-all duration-200 text-sm hover:translate-x-[-2px]"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back
+      </button>
+
+      {/* Logo + Branding */}
+      <div className="flex items-center gap-3">
+
+        {/* Logo Container */}
+        <div className="relative group">
+
+          {/* Glow */}
+          <div className="absolute inset-0 bg-blue-500/30 blur-xl rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+
+          {/* Logo */}
+          <div className="relative w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center backdrop-blur-xl shadow-lg shadow-blue-500/10">
+
+            <Image
+              src="/asset/logo.png"
+              alt="Foundry Logo"
+              width={28}
+              height={28}
+              className="object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* Text */}
+        <div className="flex flex-col leading-tight">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center">
-              <FileImage className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-white">Foundry</span>
-            <span className="text-gray-600 text-sm">/</span>
-            <span className="text-sm text-gray-400">Generated Code</span>
+            <span className="text-white font-semibold tracking-wide text-sm">
+              Foundry
+            </span>
+
+            <span className="text-gray-700 text-xs">/</span>
+
+            <span className="text-gray-400 text-sm">
+              Generated Code
+            </span>
           </div>
 
-          {/* Spacer keeps logo centered */}
-          <div className="w-16" />
+          <span className="text-[10px] text-gray-600 tracking-widest uppercase">
+            Powered by watsonx.ai
+          </span>
         </div>
-      </header>
+      </div>
 
-      {/* Models banner */}
-      {code.prismaSchema && modelNames.length > 0 && (
-        <div className="flex-shrink-0 bg-emerald-500/5 border-b border-emerald-500/15">
-          <div className="container mx-auto px-6 py-2.5 flex items-center gap-2 flex-wrap">
-            <span className="text-emerald-400 text-xs">✓</span>
-            <span className="text-emerald-400 text-xs font-medium">{modelNames.length} models detected:</span>
-            <div className="flex gap-1.5 flex-wrap">
-              {modelNames.map((m) => (
-                <span key={m} className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-xs text-emerald-300 font-mono">
-                  {m}
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* Status */}
+      <div className="flex items-center gap-2">
+
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+
+          <span className="text-[11px] text-emerald-300 font-medium">
+            AI Active
+          </span>
         </div>
-      )}
 
-      {/* Main */}
-      <div className="flex-grow container mx-auto px-6 py-6 flex flex-col gap-6">
+      </div>
+    </div>
+  </header>
 
-        {/* VSCode Workspace */}
-        <div className="grid grid-cols-12 gap-4 min-h-[700px]">
+  {/* Models banner */}
+  {code.prismaSchema && modelNames.length > 0 && (
+    <div className="flex-shrink-0 bg-emerald-500/5 border-b border-emerald-500/15 backdrop-blur-xl">
+      <div className="container mx-auto px-6 py-2.5 flex items-center gap-2 flex-wrap">
 
-          {/* ── Explorer Sidebar ── */}
-          <div className="col-span-2 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col">
-            <div className="px-3 py-3 border-b border-white/5 flex items-center justify-between">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Explorer</p>
-              <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">
-                {files.flatMap((g) => g.items).length} files
-              </span>
-            </div>
+        <span className="text-emerald-400 text-xs">✓</span>
 
-            <div className="flex-grow overflow-y-auto py-1">
-              {files.map((group) => (
-                <div key={group.group}>
+        <span className="text-emerald-400 text-xs font-medium">
+          {modelNames.length} models detected:
+        </span>
+
+        <div className="flex gap-1.5 flex-wrap">
+          {modelNames.map((m) => (
+            <span
+              key={m}
+              className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-xs text-emerald-300 font-mono hover:bg-emerald-500/20 transition-colors"
+            >
+              {m}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Main */}
+  <div className="flex-grow container mx-auto px-6 py-6 flex flex-col gap-6">
+
+    {/* VSCode Workspace */}
+    <div className="grid grid-cols-12 gap-4 min-h-[700px]">
+
+      {/* Explorer Sidebar */}
+      <div className="col-span-2 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col backdrop-blur-xl">
+
+        <div className="px-3 py-3 border-b border-white/5 flex items-center justify-between">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
+            Explorer
+          </p>
+
+          <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">
+            {files.flatMap((g) => g.items).length} files
+          </span>
+        </div>
+
+        <div className="flex-grow overflow-y-auto py-1">
+          {files.map((group) => (
+            <div key={group.group}>
+
+              <button
+                onClick={() => toggleGroup(group.group)}
+                className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-widest hover:text-gray-300 transition-colors"
+              >
+                <ChevronDown
+                  className={`w-3 h-3 transition-transform flex-shrink-0 ${
+                    openGroups[group.group] ? '' : '-rotate-90'
+                  }`}
+                />
+
+                <span>{group.icon}</span>
+
+                {group.group}
+              </button>
+
+              {openGroups[group.group] &&
+                group.items.map((file) => (
                   <button
-                    onClick={() => toggleGroup(group.group)}
-                    className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-widest hover:text-gray-300 transition-colors"
+                    key={file.id}
+                    onClick={() => setSelectedFile(file)}
+                    className={`relative overflow-hidden w-full flex items-center gap-1.5 pl-7 pr-2 py-1 text-left transition-all duration-200 ${
+                      selectedFile.id === file.id
+                        ? 'bg-blue-500/15 text-blue-300'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03] hover:translate-x-[2px]'
+                    }`}
                   >
-                    <ChevronDown className={`w-3 h-3 transition-transform flex-shrink-0 ${openGroups[group.group] ? '' : '-rotate-90'}`} />
-                    <span>{group.icon}</span>
-                    {group.group}
-                  </button>
 
-                  {openGroups[group.group] && group.items.map((file) => (
-                    <button
-                      key={file.id}
-                      onClick={() => setSelectedFile(file)}
-                      className={`w-full flex items-center gap-1.5 pl-7 pr-2 py-1 text-left transition-colors ${
-                        selectedFile.id === file.id
-                          ? 'bg-blue-500/15 text-blue-300 border-r-2 border-blue-400'
-                          : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]'
-                      }`}
-                    >
-                      <span className="text-sm leading-none flex-shrink-0">{fileIcon(file)}</span>
-                      <span className="truncate font-mono text-[11px]">{file.name.split('/').pop()}</span>
-                      {file.readOnly && (
-                        <span className="ml-auto text-[9px] text-gray-700 flex-shrink-0">ro</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ))}
+                    {/* Active Indicator */}
+                    {selectedFile.id === file.id && (
+                      <div className="absolute left-0 top-0 h-full w-[2px] bg-blue-400" />
+                    )}
+
+                    <span className="text-sm leading-none flex-shrink-0">
+                      {fileIcon(file)}
+                    </span>
+
+                    <span className="truncate font-mono text-[11px]">
+                      {file.name.split('/').pop()}
+                    </span>
+
+                    {file.readOnly && (
+                      <span className="ml-auto text-[9px] text-gray-700 flex-shrink-0">
+                        ro
+                      </span>
+                    )}
+                  </button>
+                ))}
             </div>
-          </div>
+          ))}
+        </div>
+      </div>
 
           {/* ── Editor ── */}
           <div className="col-span-6 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col">

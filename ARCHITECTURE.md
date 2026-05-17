@@ -1,668 +1,656 @@
-# Foundry - Architecture Plan
-
-## Project Overview
-Foundry is a Next.js 14 App Router application that allows developers to upload ERD diagram images and automatically generate Prisma schema files and Next.js API routes with full CRUD operations.
-
-## Technology Stack
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Database**: SQLite (development), PostgreSQL (production)
-- **ORM**: Prisma
-- **AI Service**: watsonx.ai Vision Model
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui (recommended)
-- **File Handling**: Next.js built-in file upload
-
-## File Structure
-
-```
-foundry/
-├── app/
-│   ├── layout.tsx                    # Root layout
-│   ├── page.tsx                      # Home page with upload
-│   ├── globals.css                   # Global styles
-│   ├── api/
-│   │   ├── analyze-erd/
-│   │   │   └── route.ts             # POST: Upload & analyze ERD image
-│   │   ├── generate-schema/
-│   │   │   └── route.ts             # POST: Generate schema.prisma
-│   │   └── generate-routes/
-│   │       └── route.ts             # POST: Generate API routes
-│   └── preview/
-│       └── page.tsx                  # Schema preview & editor page
-├── components/
-│   ├── ui/                           # shadcn/ui components
-│   ├── upload/
-│   │   ├── ImageUploader.tsx        # Drag & drop upload component
-│   │   └── ImagePreview.tsx         # Display uploaded image
-│   ├── schema/
-│   │   ├── SchemaEditor.tsx         # Interactive schema editor
-│   │   ├── EntityCard.tsx           # Individual entity display/edit
-│   │   ├── RelationshipEditor.tsx   # Edit relationships
-│   │   └── FieldEditor.tsx          # Edit entity fields
-│   ├── generation/
-│   │   ├── CodePreview.tsx          # Show generated code
-│   │   ├── FileDownloader.tsx       # Download generated files
-│   │   └── GenerationProgress.tsx   # Loading states
-│   └── layout/
-│       ├── Header.tsx                # App header
-│       └── Footer.tsx                # App footer
-├── lib/
-│   ├── watsonx/
-│   │   ├── client.ts                # watsonx.ai API client
-│   │   ├── vision.ts                # Vision model integration
-│   │   └── types.ts                 # watsonx types
-│   ├── parsers/
-│   │   ├── erd-parser.ts            # Parse AI response to schema structure
-│   │   ├── entity-extractor.ts      # Extract entities from parsed data
-│   │   └── relationship-mapper.ts   # Map relationships between entities
-│   ├── generators/
-│   │   ├── prisma-generator.ts      # Generate schema.prisma content
-│   │   ├── route-generator.ts       # Generate API route files
-│   │   └── crud-templates.ts        # CRUD operation templates
-│   ├── validators/
-│   │   ├── schema-validator.ts      # Validate schema structure
-│   │   └── field-validator.ts       # Validate field types
-│   └── utils/
-│       ├── file-utils.ts            # File handling utilities
-│       ├── format-utils.ts          # Code formatting utilities
-│       └── zip-utils.ts             # Create zip archives
-├── types/
-│   ├── schema.ts                     # Schema-related types
-│   ├── entity.ts                     # Entity types
-│   └── api.ts                        # API response types
-├── prisma/
-│   └── schema.prisma                 # Prisma schema (for app's own DB)
-├── public/
-│   └── examples/                     # Example ERD images
-├── .env.local                        # Environment variables
-├── .env.example                      # Example env file
-├── next.config.js                    # Next.js configuration
-├── tailwind.config.ts                # Tailwind configuration
-├── tsconfig.json                     # TypeScript configuration
-└── package.json                      # Dependencies
-```
-
-## Core Components Architecture
-
-### 1. Upload Flow Components
-
-#### ImageUploader Component
-```typescript
-// components/upload/ImageUploader.tsx
-- Drag & drop interface
-- File validation (image types, size limits)
-- Preview thumbnail
-- Upload progress indicator
-```
-
-#### ImagePreview Component
-```typescript
-// components/upload/ImagePreview.tsx
-- Display uploaded ERD image
-- Zoom/pan functionality
-- Clear/replace image option
-```
-
-### 2. Schema Editor Components
-
-#### SchemaEditor Component
-```typescript
-// components/schema/SchemaEditor.tsx
-- Main container for schema editing
-- Add/remove entities
-- Manage relationships
-- Validation feedback
-```
-
-#### EntityCard Component
-```typescript
-// components/schema/EntityCard.tsx
-- Display entity name and fields
-- Inline editing capabilities
-- Field type selection
-- Add/remove fields
-- Set primary keys, unique constraints
-```
-
-#### RelationshipEditor Component
-```typescript
-// components/schema/RelationshipEditor.tsx
-- Visual relationship mapping
-- One-to-one, one-to-many, many-to-many
-- Cascade options
-- Relationship naming
-```
-
-### 3. Generation Components
-
-#### CodePreview Component
-```typescript
-// components/generation/CodePreview.tsx
-- Syntax-highlighted code display
-- Tabs for different files
-- Copy to clipboard functionality
-```
-
-#### FileDownloader Component
-```typescript
-// components/generation/FileDownloader.tsx
-- Download individual files
-- Download all as ZIP
-- File structure preview
-```
-
-## API Route Design
-
-### 1. Analyze ERD Endpoint
-```typescript
-// app/api/analyze-erd/route.ts
-POST /api/analyze-erd
-
-Request:
-- multipart/form-data with image file
-- Max size: 10MB
-- Supported formats: PNG, JPG, JPEG
-
-Response:
-{
-  success: boolean;
-  data: {
-    entities: Array<{
-      name: string;
-      fields: Array<{
-        name: string;
-        type: string;
-        required: boolean;
-        unique: boolean;
-        default?: string;
-      }>;
-    }>;
-    relationships: Array<{
-      from: string;
-      to: string;
-      type: 'one-to-one' | 'one-to-many' | 'many-to-many';
-      fromField: string;
-      toField: string;
-    }>;
-  };
-  error?: string;
-}
-```
-
-### 2. Generate Schema Endpoint
-```typescript
-// app/api/generate-schema/route.ts
-POST /api/generate-schema
-
-Request:
-{
-  entities: Entity[];
-  relationships: Relationship[];
-  database: 'sqlite' | 'postgresql';
-}
-
-Response:
-{
-  success: boolean;
-  data: {
-    schemaContent: string;
-    fileName: 'schema.prisma';
-  };
-  error?: string;
-}
-```
-
-### 3. Generate Routes Endpoint
-```typescript
-// app/api/generate-routes/route.ts
-POST /api/generate-routes
-
-Request:
-{
-  entities: Entity[];
-  includeOperations: ['create', 'read', 'update', 'delete'];
-}
-
-Response:
-{
-  success: boolean;
-  data: {
-    routes: Array<{
-      path: string;
-      fileName: string;
-      content: string;
-    }>;
-  };
-  error?: string;
-}
-```
-
-## watsonx.ai Integration
-
-### Vision Model Setup
-
-```typescript
-// lib/watsonx/client.ts
-import { WatsonXAI } from '@ibm-cloud/watsonx-ai';
-
-export class WatsonXClient {
-  private client: WatsonXAI;
-  
-  constructor() {
-    this.client = new WatsonXAI({
-      version: '2024-05-31',
-      serviceUrl: process.env.WATSONX_URL,
-      authenticator: {
-        apikey: process.env.WATSONX_API_KEY,
-      },
-    });
-  }
-  
-  async analyzeImage(imageBuffer: Buffer): Promise<string> {
-    // Convert image to base64
-    // Call vision model
-    // Return structured response
-  }
-}
-```
-
-### Vision API Call Flow
-
-```mermaid
-graph TD
-    A[Upload Image] --> B[Convert to Base64]
-    B --> C[Send to watsonx.ai Vision API]
-    C --> D[Receive AI Response]
-    D --> E[Parse Response Text]
-    E --> F[Extract Entities & Relationships]
-    F --> G[Validate Structure]
-    G --> H[Return Parsed Schema]
-```
-
-### Prompt Engineering for ERD Analysis
-
-```typescript
-// lib/watsonx/vision.ts
-const ERD_ANALYSIS_PROMPT = `
-Analyze this Entity Relationship Diagram (ERD) image and extract:
-
-1. All entities (tables) with their names
-2. For each entity, list all fields/attributes with:
-   - Field name
-   - Data type (string, integer, boolean, datetime, etc.)
-   - Constraints (primary key, unique, required/optional)
-3. All relationships between entities:
-   - Source entity
-   - Target entity
-   - Relationship type (one-to-one, one-to-many, many-to-many)
-   - Foreign key fields
-
-Return the information in this JSON format:
-{
-  "entities": [
-    {
-      "name": "User",
-      "fields": [
-        {"name": "id", "type": "Int", "primaryKey": true, "required": true},
-        {"name": "email", "type": "String", "unique": true, "required": true}
-      ]
-    }
-  ],
-  "relationships": [
-    {
-      "from": "User",
-      "to": "Post",
-      "type": "one-to-many",
-      "fromField": "posts",
-      "toField": "author"
-    }
-  ]
-}
-`;
-```
-
-## UI Flow
-
-### Complete User Journey
-
-```mermaid
-graph TD
-    A[Landing Page] --> B[Upload ERD Image]
-    B --> C{Image Valid?}
-    C -->|No| B
-    C -->|Yes| D[Show Loading State]
-    D --> E[Call watsonx.ai API]
-    E --> F[Parse AI Response]
-    F --> G[Display Schema Preview]
-    G --> H{User Action}
-    H -->|Edit| I[Open Schema Editor]
-    I --> J[Modify Entities/Relationships]
-    J --> G
-    H -->|Generate| K[Generate Files]
-    K --> L[Show Generated Code]
-    L --> M{User Action}
-    M -->|Download Individual| N[Download File]
-    M -->|Download All| O[Download ZIP]
-    M -->|Start Over| A
-```
-
-### Page-by-Page Flow
-
-#### 1. Home Page (app/page.tsx)
-- Hero section with project description
-- Large upload area (drag & drop)
-- Example ERD images
-- "How it works" section
-
-#### 2. Preview Page (app/preview/page.tsx)
-- Uploaded image display (left panel)
-- Detected schema editor (right panel)
-- Entity cards with inline editing
-- Relationship visualization
-- "Generate Files" button
-
-#### 3. Results Page (embedded in preview)
-- Tabbed interface for generated files
-- schema.prisma preview
-- API routes preview (one tab per entity)
-- Download options
-- "Start New" button
-
-## Data Flow Architecture
-
-```mermaid
-graph LR
-    A[User Uploads Image] --> B[Next.js API Route]
-    B --> C[watsonx.ai Vision API]
-    C --> D[AI Response Text]
-    D --> E[ERD Parser]
-    E --> F[Validated Schema Object]
-    F --> G[Schema Editor UI]
-    G --> H{User Edits}
-    H --> I[Updated Schema Object]
-    I --> J[Prisma Generator]
-    I --> K[Route Generator]
-    J --> L[schema.prisma File]
-    K --> M[API Route Files]
-    L --> N[Download/Export]
-    M --> N
-```
-
-## Generator Logic
-
-### Prisma Schema Generator
-
-```typescript
-// lib/generators/prisma-generator.ts
-export function generatePrismaSchema(
-  entities: Entity[],
-  relationships: Relationship[],
-  database: 'sqlite' | 'postgresql'
-): string {
-  // 1. Generate datasource block
-  // 2. Generate generator block
-  // 3. For each entity, generate model block
-  // 4. Add fields with proper types
-  // 5. Add relationships with @relation
-  // 6. Add indexes and constraints
-  // 7. Format and return complete schema
-}
-```
-
-### API Route Generator
-
-```typescript
-// lib/generators/route-generator.ts
-export function generateCRUDRoutes(entity: Entity): RouteFile[] {
-  return [
-    generateGETRoute(entity),      // GET /api/[entity]
-    generateGETByIdRoute(entity),  // GET /api/[entity]/[id]
-    generatePOSTRoute(entity),     // POST /api/[entity]
-    generatePUTRoute(entity),      // PUT /api/[entity]/[id]
-    generateDELETERoute(entity),   // DELETE /api/[entity]/[id]
-  ];
-}
-```
-
-### CRUD Template Structure
-
-```typescript
-// lib/generators/crud-templates.ts
-
-// GET all items
-export const GET_ALL_TEMPLATE = `
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-
-export async function GET() {
-  try {
-    const items = await prisma.{{modelName}}.findMany({
-      include: {{includes}},
-    });
-    return NextResponse.json(items);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch {{modelName}}' },
-      { status: 500 }
-    );
-  }
-}
-`;
-
-// POST create item
-export const POST_TEMPLATE = `
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const item = await prisma.{{modelName}}.create({
-      data: body,
-    });
-    return NextResponse.json(item, { status: 201 });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to create {{modelName}}' },
-      { status: 500 }
-    );
-  }
-}
-`;
-
-// Similar templates for PUT, DELETE, GET by ID
-```
-
-## Type Definitions
-
-### Core Types
-
-```typescript
-// types/schema.ts
-export interface Entity {
-  id: string;
-  name: string;
-  fields: Field[];
-}
-
-export interface Field {
-  id: string;
-  name: string;
-  type: PrismaFieldType;
-  required: boolean;
-  unique: boolean;
-  primaryKey: boolean;
-  defaultValue?: string;
-  relation?: RelationInfo;
-}
-
-export type PrismaFieldType = 
-  | 'String'
-  | 'Int'
-  | 'Float'
-  | 'Boolean'
-  | 'DateTime'
-  | 'Json'
-  | 'Bytes';
-
-export interface Relationship {
-  id: string;
-  from: string;
-  to: string;
-  type: 'one-to-one' | 'one-to-many' | 'many-to-many';
-  fromField: string;
-  toField: string;
-  onDelete?: 'Cascade' | 'SetNull' | 'Restrict';
-}
-
-export interface GeneratedFile {
-  path: string;
-  fileName: string;
-  content: string;
-  language: 'prisma' | 'typescript';
-}
-```
-
-## Environment Variables
-
-```bash
-# .env.example
-
-# watsonx.ai Configuration
-WATSONX_API_KEY=your_api_key_here
-WATSONX_URL=https://us-south.ml.cloud.ibm.com
-WATSONX_PROJECT_ID=your_project_id
-
-# Database URLs
-DATABASE_URL="file:./dev.db"  # SQLite for development
-# DATABASE_URL="postgresql://user:password@localhost:5432/foundry"  # PostgreSQL for production
-
-# App Configuration
-NEXT_PUBLIC_MAX_FILE_SIZE=10485760  # 10MB in bytes
-NEXT_PUBLIC_ALLOWED_FILE_TYPES=image/png,image/jpeg,image/jpg
-```
-
-## Error Handling Strategy
-
-### Client-Side Errors
-- File validation errors (size, type)
-- Network errors during upload
-- Invalid schema structure
-- Generation failures
-
-### Server-Side Errors
-- watsonx.ai API failures
-- Rate limiting
-- Invalid AI responses
-- File generation errors
-
-### Error Response Format
-```typescript
-{
-  success: false,
-  error: {
-    code: 'WATSONX_API_ERROR',
-    message: 'Failed to analyze image',
-    details?: any
-  }
-}
-```
-
-## Performance Considerations
-
-1. **Image Upload**: Compress images client-side before upload
-2. **AI Processing**: Show progress indicators, implement timeout handling
-3. **Code Generation**: Generate files asynchronously
-4. **File Download**: Stream large files, use ZIP compression
-5. **Caching**: Cache watsonx.ai responses for identical images
-
-## Security Considerations
-
-1. **File Upload**: Validate file types and sizes
-2. **API Keys**: Store in environment variables, never expose client-side
-3. **Input Validation**: Sanitize all user inputs
-4. **Rate Limiting**: Implement rate limiting on API routes
-5. **CORS**: Configure appropriate CORS policies
-
-## Testing Strategy
-
-1. **Unit Tests**: Test parsers, generators, validators
-2. **Integration Tests**: Test API routes end-to-end
-3. **E2E Tests**: Test complete user flow with Playwright
-4. **Visual Tests**: Test with various ERD diagram styles
-5. **Error Tests**: Test error handling scenarios
-
-## Deployment Considerations
-
-### Development
-- Use SQLite for quick setup
-- Mock watsonx.ai responses for testing
-- Hot reload for rapid development
-
-### Production
-- Switch to PostgreSQL
-- Set up proper environment variables
-- Configure CDN for static assets
-- Implement monitoring and logging
-- Set up error tracking (e.g., Sentry)
-
-## Future Enhancements
-
-1. **Multiple Database Support**: MySQL, MongoDB
-2. **Export Formats**: TypeScript types, GraphQL schema
-3. **Template Library**: Pre-built ERD templates
-4. **Collaboration**: Share and edit schemas
-5. **Version Control**: Track schema changes
-6. **AI Improvements**: Fine-tune prompts, support hand-drawn ERDs
-7. **Code Generation**: Generate full Next.js app structure
-8. **Migration Generator**: Generate Prisma migration files
-
-## Dependencies
-
-```json
-{
-  "dependencies": {
-    "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@prisma/client": "^5.0.0",
-    "@ibm-cloud/watsonx-ai": "latest",
-    "zod": "^3.22.0",
-    "jszip": "^3.10.0",
-    "react-dropzone": "^14.2.0",
-    "prism-react-renderer": "^2.3.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.2.0",
-    "typescript": "^5.0.0",
-    "prisma": "^5.0.0",
-    "tailwindcss": "^3.3.0",
-    "eslint": "^8.0.0",
-    "prettier": "^3.0.0"
-  }
-}
-```
-
-## Getting Started Checklist
-
-- [ ] Initialize Next.js 14 project with TypeScript
-- [ ] Install and configure Prisma
-- [ ] Set up Tailwind CSS
-- [ ] Install shadcn/ui components
-- [ ] Configure environment variables
-- [ ] Set up watsonx.ai API client
-- [ ] Create basic file structure
-- [ ] Implement upload functionality
-- [ ] Integrate watsonx.ai vision model
-- [ ] Build schema parser
-- [ ] Create schema editor UI
-- [ ] Implement file generators
-- [ ] Add download functionality
-- [ ] Test end-to-end flow
-- [ ] Deploy to Vercel/production
+# Foundry Architecture Documentation
+### Enterprise-Grade ERD Processing Pipeline
 
 ---
 
-This architecture provides a solid foundation for building Foundry. The modular structure allows for easy testing, maintenance, and future enhancements.
+## Table of Contents
+
+1. [System Overview](#system-overview)
+2. [Pipeline Architecture](#pipeline-architecture)
+3. [Module Breakdown](#module-breakdown)
+4. [Data Flow](#data-flow)
+5. [Type System](#type-system)
+6. [Design Patterns](#design-patterns)
+7. [Scalability Considerations](#scalability-considerations)
+
+---
+
+## System Overview
+
+Foundry is a **production-grade ERD-to-code generator** that leverages IBM watsonx.ai vision intelligence to transform database diagrams into complete, deployable Node.js backends. The system is architected around a **4-stage pipeline** that strictly separates AI extraction from deterministic code generation.
+
+### Core Principles
+
+1. **Separation of Concerns**: AI handles visual extraction; deterministic generators handle code output
+2. **Type Safety**: Strongly-typed TypeScript interfaces throughout the entire pipeline
+3. **Determinism**: Same input AST always produces identical output code
+4. **Modularity**: Each component is independently testable and replaceable
+5. **Production-Ready**: Enterprise-grade error handling, validation, and logging
+
+### Technology Stack
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     FOUNDRY STACK                           │
+├─────────────────────────────────────────────────────────────┤
+│  Frontend:  Next.js 14 App Router + React 18 + TypeScript  │
+│  AI Layer:  IBM watsonx.ai Llama 3.2 90B Vision            │
+│  ORM:       Prisma 5.0 (PostgreSQL/MySQL/SQLite)           │
+│  Validation: Zod + Custom AST Validators                    │
+│  UI:        Tailwind CSS + Monaco Editor + Mermaid.js      │
+│  DevOps:    Docker + GitHub Actions + Postman              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Pipeline Architecture
+
+### High-Level Flow
+
+```
+┌──────────────┐
+│  ERD Image   │
+│  (PNG/JPG)   │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│  STAGE 1: AI EXTRACTION                                  │
+│  lib/ai/extractor.ts                                     │
+│  ─────────────────────────────────────────────────────── │
+│  • Authenticate with IBM Cloud IAM                       │
+│  • Call watsonx.ai Vision API                            │
+│  • Parse JSON response (3 fallback strategies)           │
+│  • Return: AIExtractionResult                            │
+└──────┬───────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│  STAGE 2: AST BUILDING                                   │
+│  lib/parser/ast-builder.ts                               │
+│  ─────────────────────────────────────────────────────── │
+│  • Map AI types → Prisma types                           │
+│  • Map relation types → RelationType enum                │
+│  • Normalize all names (PascalCase/camelCase)            │
+│  • Return: ERDAST (strongly-typed)                       │
+└──────┬───────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│  STAGE 3: VALIDATION                                     │
+│  lib/validators/erd-validator.ts                         │
+│  ─────────────────────────────────────────────────────── │
+│  • Remove duplicate models/relations                     │
+│  • Remove self-relations                                 │
+│  • Infer missing inverse relations                       │
+│  • Add foreign key fields                                │
+│  • Validate all references                               │
+│  • Return: ValidatedERDAST                               │
+└──────┬───────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────┐
+│  STAGE 4: CODE GENERATION                                │
+│  lib/generators/*.ts                                     │
+│  ─────────────────────────────────────────────────────── │
+│  • generatePrismaSchema()    → schema.prisma             │
+│  • generateApiRoutes()       → routes.ts                 │
+│  • generateZodSchemas()      → validation.ts             │
+│  • generateSeedScript()      → seed.ts                   │
+│  • generateMermaidDiagram()  → ERD visualization         │
+│  • Return: GeneratedCode (5 outputs)                     │
+└──────┬───────────────────────────────────────────────────┘
+       │
+       ▼
+┌──────────────┐
+│  13-File ZIP │
+│  Bundle      │
+└──────────────┘
+```
+
+### Pipeline Orchestration
+
+The `lib/pipeline/orchestrator.ts` module coordinates all stages:
+
+```typescript
+export async function processERDImage(
+  imageBuffer: Buffer,
+  dbType: string = 'postgresql'
+): Promise<GeneratedCode> {
+  // Stage 1: AI Extraction
+  const aiResult = await extractERDStructure(imageBuffer);
+  
+  // Stage 2: AST Building
+  const ast = buildERDAST(aiResult);
+  
+  // Stage 3: Validation
+  const validatedAST = validateERDAST(ast);
+  
+  // Stage 4: Code Generation
+  return {
+    prismaSchema: generatePrismaSchema(validatedAST, dbType),
+    apiRoutes: generateApiRoutes(validatedAST),
+    zodSchemas: generateZodSchemas(validatedAST),
+    seedScript: generateSeedScript(validatedAST),
+    mermaidDiagram: generateMermaidDiagram(validatedAST)
+  };
+}
+```
+
+---
+
+## Module Breakdown
+
+### 1. AI Extraction Layer (`lib/ai/`)
+
+**Purpose**: Extract structured data from ERD images using IBM watsonx.ai
+
+**Key File**: `lib/ai/extractor.ts`
+
+**Responsibilities**:
+- Authenticate with IBM Cloud using IAM tokens
+- Call watsonx.ai Llama 3.2 90B Vision model
+- Parse JSON response with aggressive fallback strategies
+- Return only structured data (no code generation)
+
+**Key Functions**:
+```typescript
+// Main extraction function
+async function extractERDStructure(imageBuffer: Buffer): Promise<AIExtractionResult>
+
+// Build system prompt for AI
+function buildExtractionPrompt(): string
+```
+
+**Error Handling**:
+- IAM token failures → Throw with clear error message
+- Empty AI response → Throw with diagnostic info
+- Invalid JSON → Try 3 parsing strategies before failing
+
+---
+
+### 2. Parser Layer (`lib/parser/`)
+
+**Purpose**: Convert AI JSON to strongly-typed AST
+
+**Key File**: `lib/parser/ast-builder.ts`
+
+**Responsibilities**:
+- Map AI field types to Prisma types
+- Map AI relation types to typed enums
+- Normalize all names during conversion
+- Build strongly-typed ERDAST
+
+**Type Mappings**:
+```typescript
+// Field Type Mapping
+string/text/varchar → String
+number/int/integer  → Int
+float/decimal       → Float
+boolean/bit         → Boolean
+date/datetime       → DateTime
+
+// Relation Type Mapping
+"one-to-one"   → RelationType.OneToOne
+"one-to-many"  → RelationType.OneToMany
+"many-to-one"  → RelationType.ManyToOne
+"many-to-many" → RelationType.ManyToMany
+```
+
+**Key Functions**:
+```typescript
+function buildERDAST(aiResult: AIExtractionResult): ERDAST
+function mapFieldType(aiType: string): PrismaFieldType
+function mapRelationType(aiType: string): RelationType
+```
+
+---
+
+### 3. Validation Layer (`lib/validators/`)
+
+**Purpose**: Normalize and validate AST before code generation
+
+**Key File**: `lib/validators/erd-validator.ts`
+
+**7-Step Validation Process**:
+
+1. **Normalize Names**: Ensure PascalCase for models, camelCase for fields
+2. **Deduplicate Tables**: Remove duplicate model definitions
+3. **Deduplicate Relations**: Remove duplicate relationship definitions
+4. **Remove Self-Relations**: Filter out tables relating to themselves
+5. **Validate References**: Ensure all relations reference existing tables
+6. **Infer Inverse Relations**: Add missing bidirectional relations for Prisma
+7. **Add FK Fields**: Automatically add foreign key fields for many-to-one relations
+
+**Key Functions**:
+```typescript
+function validateERDAST(ast: ERDAST): ValidatedERDAST
+function deduplicateTables(tables: ERDTable[]): ERDTable[]
+function inferInverseRelations(relations: ERDRelation[], tables: ERDTable[]): ERDRelation[]
+function addForeignKeyFields(ast: ERDAST): ERDAST
+```
+
+**Example Transformation**:
+```typescript
+// Input AST
+{
+  tables: [
+    { name: "Users", fields: [...] },
+    { name: "Posts", fields: [...] }
+  ],
+  relations: [
+    { from: "Users", to: "Posts", type: "one-to-many", name: "posts" }
+  ]
+}
+
+// After Validation
+{
+  tables: [
+    { name: "User", fields: [...] },  // Singularized
+    { name: "Post", fields: [..., { name: "userId", type: "Int" }] }  // FK added
+  ],
+  relations: [
+    { from: "User", to: "Post", type: "one-to-many", name: "posts" },
+    { from: "Post", to: "User", type: "many-to-one", name: "user" }  // Inverse inferred
+  ]
+}
+```
+
+---
+
+### 4. Generator Layer (`lib/generators/`)
+
+**Purpose**: Deterministically generate code from validated AST
+
+**Key Files**:
+- `prisma-generator.ts` — Prisma schema generation
+- `api-generator.ts` — Next.js API routes
+- `zod-generator.ts` — Zod validation schemas
+- `seed-generator.ts` — Faker.js seed scripts
+- `mermaid-generator.ts` — ERD diagram syntax
+
+#### 4.1 Prisma Generator
+
+**Output**: Complete `schema.prisma` file
+
+**Features**:
+- Datasource configuration (PostgreSQL/MySQL/SQLite)
+- Generator block for Prisma Client
+- Models with id, timestamps, and user fields
+- Relation fields with proper `@relation` directives
+- Foreign key constraints with onDelete behavior
+
+**Example Output**:
+```prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  posts     Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+```
+
+#### 4.2 API Generator
+
+**Output**: Next.js 14 App Router API routes
+
+**Features**:
+- Full CRUD operations per model (GET all, GET by ID, POST, PUT, DELETE)
+- Proper error handling with try-catch
+- HTTP status codes (200, 201, 404, 500)
+- Prisma client integration
+
+**Example Output**:
+```typescript
+// GET /api/user - Get all users
+export async function GET_USER() {
+  try {
+    const users = await prisma.user.findMany();
+    return NextResponse.json(users);
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to fetch users' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+#### 4.3 Zod Generator
+
+**Output**: Zod validation schemas
+
+**Features**:
+- Create schemas (exclude id, timestamps, FKs)
+- Update schemas (all fields optional)
+- Intelligent type inference (email → z.string().email())
+- TypeScript type exports
+
+**Example Output**:
+```typescript
+export const CreateUserSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+});
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+});
+
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+```
+
+#### 4.4 Seed Generator
+
+**Output**: Prisma seed script with Faker.js
+
+**Features**:
+- 10 records per model
+- Intelligent field-to-faker mapping
+- Respects FK order (parents before children)
+- Proper error handling and disconnect
+
+**Field Mapping Examples**:
+```typescript
+email     → faker.internet.email()
+name      → faker.person.fullName()
+title     → faker.lorem.sentence()
+content   → faker.lorem.paragraph()
+age       → faker.number.int({ min: 18, max: 80 })
+price     → parseFloat(faker.commerce.price())
+```
+
+#### 4.5 Mermaid Generator
+
+**Output**: Mermaid ERD diagram syntax
+
+**Features**:
+- Proper cardinality notation (||--o{, ||--||, }o--o{)
+- Entity blocks with field types
+- PK/FK/UK annotations
+- Sanitized names for Mermaid compatibility
+
+**Example Output**:
+```mermaid
+erDiagram
+USER ||--o{ POST : "posts"
+USER {
+  int ID PK
+  string NAME
+  string EMAIL UK
+  datetime CREATED_AT
+  datetime UPDATED_AT
+}
+POST {
+  int ID PK
+  string TITLE
+  string CONTENT
+  int USER_ID FK
+  datetime CREATED_AT
+  datetime UPDATED_AT
+}
+```
+
+---
+
+### 5. Utility Layer (`lib/utils/`)
+
+**Purpose**: Shared string manipulation utilities
+
+**Key File**: `lib/utils/string.ts`
+
+**Functions**:
+```typescript
+toPascalCase(str: string): string        // "blog_posts" → "BlogPost"
+toCamelCase(str: string): string         // "user_id" → "userId"
+toSnakeCase(str: string): string         // "userId" → "user_id"
+singularize(word: string): string        // "users" → "user"
+pluralize(word: string): string          // "user" → "users"
+normalizeModelName(name: string): string // "blog_posts" → "BlogPost"
+normalizeFieldName(name: string): string // "user_id" → "userId"
+```
+
+---
+
+## Data Flow
+
+### Request Flow (Upload → Results)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. User uploads ERD image via app/page.tsx                │
+│     • React Dropzone handles file selection                │
+│     • File validation (type, size)                          │
+│     • Preview generation                                    │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. POST /api/generate (app/api/generate/route.ts)         │
+│     • Extract image buffer from FormData                    │
+│     • Extract dbType (postgresql/mysql/sqlite)              │
+│     • Validate pipeline configuration                       │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. processERDImage() orchestrator                          │
+│     • Execute 4-stage pipeline                              │
+│     • Log progress at each stage                            │
+│     • Return GeneratedCode object                           │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  4. API response with generated code                        │
+│     • JSON response with 5 code outputs                     │
+│     • Store in sessionStorage                               │
+│     • Redirect to /results                                  │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────┐
+│  5. Results page (app/results/page.tsx)                    │
+│     • Monaco editors for code viewing/editing               │
+│     • Mermaid diagram visualization                         │
+│     • ZIP download with 13 files                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Type System
+
+### Core Type Definitions (`types/erd.ts`)
+
+```typescript
+// Prisma field types
+export type PrismaFieldType = 
+  | 'String' | 'Int' | 'Float' 
+  | 'Boolean' | 'DateTime' | 'Json';
+
+// Relation types
+export type RelationType = 
+  | 'one-to-one' | 'one-to-many' 
+  | 'many-to-one' | 'many-to-many';
+
+// Field definition
+export interface ERDField {
+  name: string;
+  type: PrismaFieldType;
+  isRequired: boolean;
+  isUnique: boolean;
+  isArray: boolean;
+  defaultValue?: string | number | boolean;
+}
+
+// Relation definition
+export interface ERDRelation {
+  name: string;
+  from: string;
+  to: string;
+  type: RelationType;
+  fromField?: string;
+  toField?: string;
+  onDelete?: 'Cascade' | 'SetNull' | 'Restrict';
+}
+
+// Table definition
+export interface ERDTable {
+  name: string;
+  fields: ERDField[];
+}
+
+// Base AST
+export interface ERDAST {
+  tables: ERDTable[];
+  relations: ERDRelation[];
+}
+
+// Validated AST (after validation layer)
+export interface ValidatedERDAST extends ERDAST {
+  validated: true;
+  timestamp: string;
+}
+
+// AI extraction result (from watsonx.ai)
+export interface AIExtractionResult {
+  tables: Array<{
+    name: string;
+    fields: Array<{
+      name: string;
+      type: string;
+      required?: boolean;
+      unique?: boolean;
+    }>;
+  }>;
+  relations: Array<{
+    from: string;
+    to: string;
+    type: string;
+    name?: string;
+  }>;
+}
+
+// Final generated code
+export interface GeneratedCode {
+  prismaSchema: string;
+  apiRoutes: string;
+  zodSchemas: string;
+  seedScript: string;
+  mermaidDiagram: string;
+}
+```
+
+---
+
+## Design Patterns
+
+### 1. Pipeline Pattern
+
+The entire system follows a **pipeline architecture** where data flows through sequential stages, each with a single responsibility.
+
+**Benefits**:
+- Easy to test each stage independently
+- Clear separation of concerns
+- Simple to add new stages or modify existing ones
+- Predictable data flow
+
+### 2. Builder Pattern
+
+The AST builder uses the **builder pattern** to construct complex objects step-by-step.
+
+```typescript
+function buildERDAST(aiResult: AIExtractionResult): ERDAST {
+  const tables = aiResult.tables.map(buildTable);
+  const relations = aiResult.relations.map(buildRelation);
+  return { tables, relations };
+}
+```
+
+### 3. Strategy Pattern
+
+Generators use the **strategy pattern** to support multiple database types.
+
+```typescript
+const providers: Record<string, string> = {
+  postgresql: 'provider = "postgresql"',
+  mysql: 'provider = "mysql"',
+  sqlite: 'provider = "sqlite"'
+};
+```
+
+### 4. Factory Pattern
+
+The orchestrator acts as a **factory** that creates the final GeneratedCode object.
+
+```typescript
+return {
+  prismaSchema: generatePrismaSchema(validatedAST, dbType),
+  apiRoutes: generateApiRoutes(validatedAST),
+  // ... other generators
+};
+```
+
+---
+
+## Scalability Considerations
+
+### Current Limitations
+
+1. **Single Image Processing**: Processes one ERD at a time
+2. **In-Memory Processing**: No persistent storage of ASTs
+3. **Synchronous Pipeline**: Blocks until completion
+
+### Future Enhancements
+
+1. **Batch Processing**: Queue system for multiple ERDs
+2. **AST Caching**: Redis cache for validated ASTs
+3. **Async Pipeline**: Background jobs with progress tracking
+4. **Version Control**: Git integration for generated code
+5. **Team Collaboration**: Multi-user workspaces
+6. **Custom Templates**: User-defined code generation templates
+
+### Performance Optimizations
+
+1. **Lazy Loading**: Load generators only when needed
+2. **Parallel Generation**: Generate files concurrently
+3. **Streaming Responses**: Stream large files instead of buffering
+4. **CDN Integration**: Serve static assets from CDN
+
+---
+
+## Conclusion
+
+Foundry's architecture prioritizes **type safety**, **determinism**, and **modularity**. By separating AI extraction from code generation and using a strongly-typed AST as an intermediate representation, the system achieves both flexibility and reliability—essential for enterprise production environments.
+
+The 4-stage pipeline ensures that each component can be tested, modified, or replaced independently, making Foundry a maintainable and scalable solution for ERD-to-code generation.
+
+---
+
+*For implementation details, see [PIPELINE_ARCHITECTURE.md](./PIPELINE_ARCHITECTURE.md)*  
+*For watsonx.ai integration, see [WATSONX_INTEGRATION.md](./WATSONX_INTEGRATION.md)*

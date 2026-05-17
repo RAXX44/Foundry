@@ -16,10 +16,12 @@ function sanitizeName(name: string): string {
 
 /**
  * Sanitize relation labels
+ * Remove special characters except spaces, then escape any remaining quotes
  */
 function sanitizeLabel(label: string): string {
   return label
     .replace(/[^a-zA-Z0-9_ ]/g, '')
+    .replace(/"/g, '')  // Remove any quotes to prevent breaking wrapped quotes
     .trim();
 }
 
@@ -198,6 +200,7 @@ function generateEntity(
 
 /**
  * Generate Mermaid relationship line
+ * Labels are wrapped in double quotes to handle spaces correctly
  */
 function generateRelationship(
   relation: ERDRelation
@@ -218,7 +221,7 @@ function generateRelationship(
     relation.from
   )} ${cardinality} ${sanitizeName(
     relation.to
-  )} : ${label}`;
+  )} : "${label}"`;
 }
 
 /**
