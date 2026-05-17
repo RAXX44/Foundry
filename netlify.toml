@@ -1,0 +1,12 @@
+[[plugins]]
+package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+from = "/*"
+to = "/.netlify/functions/next_image"
+status = 200
+
+[[redirects]]
+from = "/*"
+to = "/"
+status = 200
