@@ -1,233 +1,331 @@
 /**
  * watsonx.ai Integration Helper
- *
- * Setup Instructions:
- * 1. Create an IBM Cloud account at https://cloud.ibm.com
- * 2. Create a watsonx.ai service instance
- * 3. Get your API key and Project ID
- * 4. Add credentials to .env.local
+ * Optimized for maximum ERD extraction accuracy
  */
 
 export interface ERDAnalysisResult {
   prismaSchema: string;
   apiRoutes: string;
   mermaidDiagram: string;
+  zodSchemas: string;
+  seedScript: string;
 }
 
-/**
- * Build the system prompt for ERD analysis
- */
-function buildSystemPrompt(dbType: string): string {
-  return `You are an expert database architect and code generator.
-Analyze the provided ERD (Entity Relationship Diagram) image and generate two things:
-
-1. A complete Prisma schema file
-2. Complete Next.js API routes with full CRUD operations
-
-CRITICAL INSTRUCTIONS:
-- Return ONLY valid JSON, no markdown, no explanations, no conversational text
-- Do not wrap the response in markdown code blocks
-- The JSON must have exactly two keys: "prismaSchema" and "apiRoutes"
-- Both values must be complete, production-ready code as strings
-
-PRISMA SCHEMA REQUIREMENTS:
-- Include datasource block with "${dbType}" as the database provider
-- For sqlite, use: url = "file:./dev.db" instead of env("DATABASE_URL")
-- For mysql, use: provider = "mysql" and url = env("DATABASE_URL")
-- For postgresql, use: provider = "postgresql" and url = env("DATABASE_URL")
-- Include generator block for Prisma Client
-- Create models for all entities detected in the ERD
-- Include all fields with correct Prisma types (String, Int, Float, Boolean, DateTime, Json)
-
-CRITICAL RELATIONSHIP RULES:
-- You MUST use Prisma @relation directives to connect foreign keys correctly
-- If a table has a foreign key field (e.g., student_id, teacher_id), it MUST have a corresponding relation field
-- Example: If Marks table has 'studentId Int', it MUST also have 'student Student @relation(fields: [studentId], references: [id])'
-- The parent model must have the inverse relation (e.g., Student model has 'marks Mark[]')
-- Never leave foreign key fields as isolated Int fields without @relation
-
-CRITICAL NAMING RULES:
-- Model names MUST be singular PascalCase (Student NOT Students, Teacher NOT Teachers, Mark NOT Marks)
-- Field names MUST be camelCase (studentId NOT student_id, firstName NOT first_name)
-- Relation field names should be descriptive (student, teacher, marks, etc.)
-
-CRITICAL TIMESTAMP RULES:
-- EVERY model MUST have these two fields automatically added:
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-- Add these even if they are not visible in the ERD image
-
-CRITICAL ID FIELD RULES:
-- Each model should have ONE primary key field: id Int @id @default(autoincrement())
-- Do NOT add redundant ID fields (e.g., don't add 'studentId Int' to Student model for its own ID)
-- Foreign keys are separate fields (e.g., studentId in Marks table references Student.id)
-
-API ROUTES REQUIREMENTS:
-- Generate complete Next.js 14 App Router API routes
-- Include all CRUD operations: GET (all), GET (by id), POST, PUT, DELETE
-- Use proper TypeScript types
-- Include error handling with try-catch blocks
-- Use Prisma client for database operations
-- Return proper HTTP status codes
-- Include proper imports (NextResponse, prisma)
-
-MERMAID DIAGRAM REQUIREMENTS:
-- Generate a valid Mermaid erDiagram syntax representing the database structure
-- Use proper Mermaid relationship syntax: ||--o{, }o--||, ||--||, etc.
-- Include all entities and their relationships
-- Format: erDiagram\\n  ENTITY1 ||--o{ ENTITY2 : "relationship"
-
-EXAMPLE CORRECT RESPONSE (must have THREE keys):
-{
-  "prismaSchema": "datasource db {\\n  provider = \\"postgresql\\"\\n  url = env(\\"DATABASE_URL\\")\\n}\\n\\ngenerator client {\\n  provider = \\"prisma-client-js\\"\\n}\\n\\nmodel Student {\\n  id        Int      @id @default(autoincrement())\\n  name      String\\n  email     String   @unique\\n  marks     Mark[]\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}\\n\\nmodel Teacher {\\n  id        Int      @id @default(autoincrement())\\n  name      String\\n  subject   String\\n  marks     Mark[]\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}\\n\\nmodel Mark {\\n  id        Int      @id @default(autoincrement())\\n  score     Int\\n  studentId Int\\n  student   Student  @relation(fields: [studentId], references: [id])\\n  teacherId Int\\n  teacher   Teacher  @relation(fields: [teacherId], references: [id])\\n  createdAt DateTime @default(now())\\n  updatedAt DateTime @updatedAt\\n}",
-  "apiRoutes": "import { NextResponse } from 'next/server';\\nimport { prisma } from '@/lib/prisma';\\n\\n// GET /api/students\\nexport async function GET() {\\n  try {\\n    const students = await prisma.student.findMany({ include: { marks: true } });\\n    return NextResponse.json(students);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to fetch students' }, { status: 500 });\\n  }\\n}\\n\\n// POST /api/students\\nexport async function POST(request: Request) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.create({ data: body });\\n    return NextResponse.json(student, { status: 201 });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to create student' }, { status: 500 });\\n  }\\n}\\n\\n// PUT /api/students/[id]\\nexport async function PUT(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    const body = await request.json();\\n    const student = await prisma.student.update({ where: { id: parseInt(params.id) }, data: body });\\n    return NextResponse.json(student);\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to update student' }, { status: 500 });\\n  }\\n}\\n\\n// DELETE /api/students/[id]\\nexport async function DELETE(request: Request, { params }: { params: { id: string } }) {\\n  try {\\n    await prisma.student.delete({ where: { id: parseInt(params.id) } });\\n    return NextResponse.json({ success: true });\\n  } catch (error) {\\n    return NextResponse.json({ error: 'Failed to delete student' }, { status: 500 });\\n  }\\n}",
-  "mermaidDiagram": "erDiagram\\n  Student ||--o{ Mark : has\\n  Teacher ||--o{ Mark : grades\\n  Student {\\n    int id PK\\n    string name\\n    string email\\n    datetime createdAt\\n    datetime updatedAt\\n  }\\n  Teacher {\\n    int id PK\\n    string name\\n    string subject\\n    datetime createdAt\\n    datetime updatedAt\\n  }\\n  Mark {\\n    int id PK\\n    int score\\n    int studentId FK\\n    int teacherId FK\\n    datetime createdAt\\n    datetime updatedAt\\n  }"
+// Detect MIME type from buffer magic bytes
+function detectMimeType(buffer: Buffer): string {
+  const hex = buffer.toString('hex', 0, 4).toUpperCase();
+  if (hex.startsWith('89504E47')) return 'image/png';
+  if (hex.startsWith('FFD8FF')) return 'image/jpeg';
+  if (hex.startsWith('47494638')) return 'image/gif';
+  const hex12 = buffer.toString('hex', 8, 12).toUpperCase();
+  if (hex12 === '57454250') return 'image/webp';
+  return 'image/png';
 }
 
-Now analyze the ERD image and return the JSON response with ALL THREE keys (prismaSchema, apiRoutes, mermaidDiagram) following ALL the rules above.`;
-}
+// Sanitize double-escaped strings from watsonx output
+function sanitize(str: string): string {
+  if (!str || typeof str !== 'string') return '';
 
-/**
- * Analyze an ERD image using watsonx.ai vision model
- */
-export async function analyzeERD(imageBuffer: Buffer, dbType: string = 'postgresql'): Promise<ERDAnalysisResult> {
-  try {
-    const apiKey = process.env.WATSONX_API_KEY!;
-    const url = process.env.WATSONX_URL || 'https://us-south.ml.cloud.ibm.com';
-    const projectId = process.env.WATSONX_PROJECT_ID!;
+  let result = str;
 
-    // 1. Dapatkan IAM Token dari IBM secara langsung
-    const tokenRes = await fetch('https://iam.cloud.ibm.com/identity/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=${apiKey}`
-    });
-    
-    const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) {
-      throw new Error("Gagal mendapatkan IAM Token. Cek kembali WATSONX_API_KEY.");
-    }
-
-    // 2. Siapkan Gambar dan Prompt
-    const base64Image = imageBuffer.toString('base64');
-    const imageDataUrl = `data:image/png;base64,${base64Image}`;
-    const systemPrompt = buildSystemPrompt(dbType);
-
-    // 3. Panggil WatsonX REST API dengan Format Multimodal (Chat)
-    const chatRes = await fetch(`${url}/ml/v1/text/chat?version=2024-05-31`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${tokenData.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model_id: 'meta-llama/llama-3-2-90b-vision-instruct',
-        project_id: projectId,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: systemPrompt },
-              { type: "image_url", image_url: { url: imageDataUrl } }
-            ]
-          }
-        ],
-        max_tokens: 4000,
-        temperature: 0.1
-      })
-    });
-    
-    const chatData = await chatRes.json();
-
-    // 4. Ambil jawaban dari array "choices"
-    const generatedText = chatData.choices?.[0]?.message?.content || "";
-    
-    console.log("\n--- RAW AI RESPONSE START ---\n", generatedText, "\n--- RAW AI RESPONSE END ---\n");
-
-    if (!generatedText) {
-      console.error("Full IBM Response:", JSON.stringify(chatData, null, 2));
-      throw new Error("AI returned empty response. Check server logs.");
-    }
-
-    // 5. Aggressive JSON extraction with fallback to markdown parsing
-    let parsedResult: ERDAnalysisResult;
-
-    try {
-      // Step 1: Try direct JSON parse
-      parsedResult = JSON.parse(generatedText);
-    } catch (directParseError) {
-      try {
-        // Step 2: Strip markdown code blocks and try again
-        let cleanedText = generatedText
-          .replace(/```json\s*/g, '')
-          .replace(/```prisma\s*/g, '')
-          .replace(/```typescript\s*/g, '')
-          .replace(/```\s*/g, '')
-          .trim();
-
-        // Try to find JSON object
-        const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          parsedResult = JSON.parse(jsonMatch[0]);
-        } else {
-          throw new Error('No JSON found');
-        }
-      } catch (markdownParseError) {
-        // Step 3: Manual extraction from markdown blocks
-        console.log("Attempting manual extraction from markdown...");
-        
-        // Extract Prisma schema
-        const prismaMatch = generatedText.match(/```prisma\s*([\s\S]*?)```/) ||
-                           generatedText.match(/datasource db \{[\s\S]*?\}[\s\S]*?generator client \{[\s\S]*?\}[\s\S]*?(?:model \w+ \{[\s\S]*?\})+/);
-        
-        // Extract TypeScript/API routes
-        const tsMatch = generatedText.match(/```typescript\s*([\s\S]*?)```/) ||
-                       generatedText.match(/```ts\s*([\s\S]*?)```/) ||
-                       generatedText.match(/import \{ NextResponse \}[\s\S]*?export async function/);
-
-        if (!prismaMatch && !tsMatch) {
-          throw new Error('Could not extract Prisma schema or API routes from markdown response');
-        }
-
-        parsedResult = {
-          prismaSchema: prismaMatch ? prismaMatch[1] || prismaMatch[0] : '// Could not extract Prisma schema',
-          apiRoutes: tsMatch ? tsMatch[1] || tsMatch[0] : '// Could not extract API routes',
-          mermaidDiagram: ''
-        };
-      }
-    }
-
-    // Validate response structure
-    if (!parsedResult.prismaSchema || !parsedResult.apiRoutes) {
-      throw new Error('Invalid response structure from AI model - missing prismaSchema or apiRoutes');
-    }
-    
-    // Set default mermaidDiagram if missing
-    if (!parsedResult.mermaidDiagram) {
-      parsedResult.mermaidDiagram = '';
-    }
-
-    // Clean up any remaining markdown artifacts
-    parsedResult.prismaSchema = parsedResult.prismaSchema
-      .replace(/```prisma\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim();
-    
-    parsedResult.apiRoutes = parsedResult.apiRoutes
-      .replace(/```typescript\s*/g, '')
-      .replace(/```ts\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim();
-
-    return parsedResult;
-
-  } catch (error) {
-    console.error('watsonx.ai API Error:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to analyze ERD: ${error.message}`);
-    }
-    throw new Error('Failed to analyze ERD with watsonx.ai');
+  if (result.startsWith('"') && result.endsWith('"')) {
+    try { result = JSON.parse(result); } catch { /* continue */ }
   }
+
+  result = result
+    .replace(/\\\\n/g, '\n')
+    .replace(/\\\\t/g, '\t')
+    .replace(/\\\\r/g, '')
+    .replace(/\\\\"/g, '"')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '')
+    .replace(/\\"/g, '"');
+
+  result = result
+    .replace(/```prisma\s*/gi, '')
+    .replace(/```typescript\s*/gi, '')
+    .replace(/```mermaid\s*/gi, '')
+    .replace(/```ts\s*/gi, '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '');
+
+  return result.trim();
+}
+
+// Fix literal unescaped newlines inside JSON string values
+// Root cause: watsonx returns {"key": "line1\nline2"} with REAL newlines, not \n
+function fixUnescapedNewlines(jsonStr: string): string {
+  let fixed = '';
+  let inString = false;
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+    const prev = i > 0 ? jsonStr[i - 1] : '';
+
+    if (ch === '"' && prev !== '\\') {
+      inString = !inString;
+      fixed += ch;
+    } else if (inString) {
+      if (ch === '\n') fixed += '\\n';
+      else if (ch === '\r') fixed += '\\r';
+      else if (ch === '\t') fixed += '\\t';
+      else fixed += ch;
+    } else {
+      fixed += ch;
+    }
+  }
+
+  return fixed;
+}
+
+function tryParse(s: string): ERDAnalysisResult | null {
+  try {
+    const p = JSON.parse(s);
+    return p && p.prismaSchema ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractJSON(text: string): ERDAnalysisResult | null {
+  // Strip markdown fences
+  const stripped = text
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  // Strategy 1: direct parse
+  const r1 = tryParse(stripped);
+  if (r1) return r1;
+
+  // Find outermost { }
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+
+  if (start !== -1 && end > start) {
+    const block = stripped.slice(start, end + 1);
+
+    // Strategy 2: parse block directly
+    const r2 = tryParse(block);
+    if (r2) return r2;
+
+    // Strategy 3: fix unescaped newlines then parse — MAIN FIX
+    const r3 = tryParse(fixUnescapedNewlines(block));
+    if (r3) return r3;
+  }
+
+  // Strategy 4: manual field extraction — last resort
+  const grabField = (key: string): string => {
+    const pattern = '"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\[\\s\\S])*?)"';
+    const m = text.match(new RegExp(pattern));
+    if (!m) return '';
+    return m[1]
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"');
+  };
+
+  const prismaSchema = grabField('prismaSchema');
+  const apiRoutes = grabField('apiRoutes');
+
+  if (prismaSchema && apiRoutes) {
+    return {
+      prismaSchema,
+      apiRoutes,
+      mermaidDiagram: grabField('mermaidDiagram'),
+      zodSchemas: grabField('zodSchemas'),
+      seedScript: grabField('seedScript'),
+    };
+  }
+
+  return null;
+}
+
+function buildSystemPrompt(dbType: string): string {
+  const dbUrl = dbType === 'sqlite'
+    ? 'url = "file:./dev.db"'
+    : 'url = env("DATABASE_URL")';
+
+  const lines = [
+    'You are a world-class database architect and senior backend engineer.',
+    'Your ONLY job is to analyze ERD diagram images and return structured code.',
+    '',
+    'ABSOLUTE RULES:',
+    '- Analyze EVERY table, column, data type, PK, FK, and relationship in the image',
+    '- Return ONLY a raw JSON object — no markdown, no backticks, no explanation',
+    '- NEVER return "Could not extract" — always produce complete valid output',
+    '- If unclear, make a reasonable professional assumption',
+    '',
+    'Return exactly this JSON structure:',
+    '{"prismaSchema":"...","apiRoutes":"...","mermaidDiagram":"...","zodSchemas":"...","seedScript":"..."}',
+    '',
+    'PRISMA SCHEMA RULES:',
+    '- Provider: ' + dbType,
+    '- ' + dbUrl,
+    '- Model names: singular PascalCase (Customer NOT Customers)',
+    '- Field names: camelCase (customerId NOT customer_id)',
+    '- Every model MUST have: id Int @id @default(autoincrement()), createdAt DateTime @default(now()), updatedAt DateTime @updatedAt',
+    '- NEVER add self-relations (Customer must NOT relate to Customer)',
+    '- NEVER duplicate models',
+    '- NEVER add redundant ID fields like CustomerID if id already exists',
+    '- FK field naming: customerId Int (NOT CustomerID)',
+    '- Every FK field needs @relation. Example:',
+    '-   customerId  Int',
+    '-   customer    Customer  @relation(fields: [customerId], references: [id])',
+    '- Parent models MUST have inverse array relations. Example:',
+    '-   In Customer: requests Request[]',
+    '- One-to-one: use @unique on FK field and singular inverse (inventory Inventory?)',
+    '- API routes must import prisma from @/lib/prisma — never new PrismaClient()',
+    '',
+    'API ROUTES RULES:',
+    '- Next.js 14 App Router, TypeScript',
+    '- Full CRUD per model: GET all, GET by id, POST, PUT, DELETE',
+    '- try-catch error handling, proper HTTP status codes',
+    '- Import ONLY: import { prisma } from @/lib/prisma — never instantiate PrismaClient directly',
+    '',
+    'MERMAID DIAGRAM RULES:',
+    '- Start with exactly: erDiagram',
+    '- Syntax: PARENT ||--o{ CHILD : "label"',
+    '- ||--o{ = one-to-many, ||--|| = one-to-one, }o--o{ = many-to-many',
+    '- NEVER make a table relate to itself',
+    '- ONLY add relations that match actual FK in the ERD image',
+    '- Correct example: Customer ||--o{ Request : "customerId"',
+    '- Correct example: Request ||--o{ Transaction : "requestId"',
+    '- After relations, list fields: ENTITY { String name Int id }',
+    '',
+    'ZOD SCHEMAS RULES:',
+    '- Import z from zod',
+    '- Create[Model]Schema and Update[Model]Schema per model',
+    '- Update schemas: all fields .optional()',
+    '',
+    'SEED SCRIPT RULES:',
+    '- Use @faker-js/faker and PrismaClient',
+    '- 5 rows per model with realistic faker data',
+    '- Respect FK order (parents before children)',
+    '- End with: main().catch(console.error).finally(() => prisma.$disconnect())',
+    '',
+    'IMPORTANT: Return ONLY the raw JSON. No markdown. No explanation. No code fences.',
+  ];
+
+  return lines.join('\n');
+}
+
+export async function analyzeERD(
+  imageBuffer: Buffer,
+  dbType: string = 'postgresql'
+): Promise<ERDAnalysisResult> {
+  const apiKey = process.env.WATSONX_API_KEY;
+  const baseUrl = process.env.WATSONX_URL || 'https://us-south.ml.cloud.ibm.com';
+  const projectId = process.env.WATSONX_PROJECT_ID;
+
+  if (!apiKey || !projectId) {
+    throw new Error('Missing WATSONX_API_KEY or WATSONX_PROJECT_ID in environment variables.');
+  }
+
+  // Step 1: Get IAM Token
+  const tokenRes = await fetch('https://iam.cloud.ibm.com/identity/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=urn:ibm:params:oauth:grant-type:apikey&apikey=' + apiKey,
+  });
+
+  if (!tokenRes.ok) {
+    throw new Error('IAM token request failed: ' + tokenRes.status + ' ' + tokenRes.statusText);
+  }
+
+  const tokenData = await tokenRes.json();
+  if (!tokenData.access_token) {
+    throw new Error('Failed to get IAM Token. Check WATSONX_API_KEY.');
+  }
+
+  // Step 2: Prepare image with correct MIME type
+  const mimeType = detectMimeType(imageBuffer);
+  const base64Image = imageBuffer.toString('base64');
+  const imageDataUrl = 'data:' + mimeType + ';base64,' + base64Image;
+
+  console.log('[watsonx] Image: ' + (imageBuffer.length / 1024).toFixed(1) + 'KB, MIME: ' + mimeType + ', DB: ' + dbType);
+
+  // Step 3: Call watsonx vision API
+  const chatRes = await fetch(baseUrl + '/ml/v1/text/chat?version=2024-05-31', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + tokenData.access_token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model_id: 'meta-llama/llama-3-2-90b-vision-instruct',
+      project_id: projectId,
+      messages: [
+        {
+          role: 'system',
+          content: buildSystemPrompt(dbType),
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Analyze this ERD diagram completely. Extract every table, column, data type, primary key, foreign key, and relationship. Return only the JSON object.',
+            },
+            {
+              type: 'image_url',
+              image_url: { url: imageDataUrl },
+            },
+          ],
+        },
+      ],
+      max_tokens: 8000,
+      temperature: 0.05,
+    }),
+  });
+
+  if (!chatRes.ok) {
+    const errText = await chatRes.text();
+    throw new Error('watsonx API error: ' + chatRes.status + ' ' + errText.slice(0, 300));
+  }
+
+  const chatData = await chatRes.json();
+
+  // Step 4: Extract raw text
+  const rawContent = chatData.choices?.[0]?.message?.content;
+  const generatedText: string = Array.isArray(rawContent)
+    ? rawContent.map((c: { text?: string }) => c.text || '').join('')
+    : (rawContent || '');
+
+  console.log('[watsonx] Raw response (first 500 chars):\n' + generatedText.slice(0, 500));
+
+  if (!generatedText || generatedText.trim().length === 0) {
+    console.error('[watsonx] Full API response:', JSON.stringify(chatData, null, 2));
+    throw new Error('watsonx returned empty response.');
+  }
+
+  // Step 5: Parse JSON with multi-strategy fallback
+  const parsed = extractJSON(generatedText);
+
+  if (!parsed) {
+    console.error('[watsonx] Could not parse JSON. Raw:\n' + generatedText.slice(0, 800));
+    throw new Error('AI response did not contain valid JSON. Check server logs.');
+  }
+
+  // Step 6: Sanitize all fields
+  const result: ERDAnalysisResult = {
+    prismaSchema: sanitize(parsed.prismaSchema || '// Schema generation failed'),
+    apiRoutes: sanitize(parsed.apiRoutes || '// Routes generation failed'),
+    mermaidDiagram: sanitize(parsed.mermaidDiagram || ''),
+    zodSchemas: sanitize(parsed.zodSchemas || '// Zod schemas generation failed'),
+    seedScript: sanitize(parsed.seedScript || '// Seed script generation failed'),
+  };
+
+  // Step 7: Fix mermaid header if missing
+  if (result.mermaidDiagram && !result.mermaidDiagram.trimStart().startsWith('erDiagram')) {
+    result.mermaidDiagram = 'erDiagram\n' + result.mermaidDiagram;
+  }
+
+  const detectedModels = (result.prismaSchema.match(/^model\s+\w+/gm) || []).join(', ');
+  console.log('[watsonx] Success. Models: ' + detectedModels);
+
+  return result;
 }
 
 export async function testConnection(): Promise<boolean> {
