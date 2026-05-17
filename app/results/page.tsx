@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Editor from '@monaco-editor/react';
-import { Download, ArrowLeft, Copy, Check, FileImage, ChevronDown } from 'lucide-react';
+import { Download, ArrowLeft, Copy, Check, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-
 
 interface GeneratedCode {
   prismaSchema: string;
@@ -29,6 +28,143 @@ interface FileGroup {
   items: FileItem[];
 }
 
+// ─── FIX 1: Sanitize mermaid output dari AI ──────────────────────────────────
+// watsonx kadang generate syntax yang tidak valid untuk mermaid v11:
+//   - label relasi pakai tanda kutip → dihapus
+//   - tipe field "string" → diganti "varchar"
+//   - "datetime" → diganti "timestamp"
+function sanitizeMermaid(chart: string): string {
+  if (!chart) return '';
+
+  return chart
+    // 1. Amankan tanda kutip pada label relasi (Bawaan lu)
+    .replace(/:\s*"([^"]+)"/g, ': $1')      
+    .replace(/:\s*'([^']+)'/g, ': $1')       
+    
+    // 2. Normalisasi tipe data dasar (Bawaan lu)
+    .replace(/\bstring\b/gi, 'varchar')       
+    .replace(/\bdatetime\b/gi, 'timestamp')   
+    
+    // 3. FIX: Bersihkan modifier kunci ganda ilegal (seperti PK UK atau UK PK berjejeran)
+    .replace(/\bPK\s+UK\b/gi, 'PK')
+    .replace(/\bUK\s+PK\b/gi, 'PK')
+    
+    // 4. FIX: Bersihkan modifier 'ID' ilegal yang sering disisipkan AI sebelum tipe data
+    .replace(/\bint\s+ID\s+PK\b/gi, 'int ID PK') // jika ID dianggap nama kolom
+    // Jika AI nulis "int ID PK UK", regex nomor 3 & 4 akan merapikannya jadi "int ID PK"
+    
+    // 5. Normalisasi spasi ganda di dalam block agar token parser tidak bingung
+    .replace(/ {2,}/g, ' ')
+    
+    // 6. Normalize line endings (Bawaan lu)
+    .replace(/\r\n/g, '\n')                   
+    .trim();
+}
+
+// ─── FIX 2: Render mermaid client-side, tanpa CDN eksternal ──────────────────
+// Tidak ada lagi request ke mermaid.ink → tidak ada 400 error di local / Vercel
+function MermaidDiagram({ chart }: { chart: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!chart || !containerRef.current) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(false);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const mermaid = (await import('mermaid')).default;
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          er: {
+            diagramPadding: 40,
+            layoutDirection: 'TB',
+            minEntityWidth: 100,
+            minEntityHeight: 75,
+            entityPadding: 15,
+          },
+          securityLevel: 'loose',
+        });
+
+        const cleanChart = sanitizeMermaid(chart);
+        const id = `mermaid-erd-${Date.now()}`;
+        const { svg } = await mermaid.render(id, cleanChart);
+
+        if (!cancelled && containerRef.current) {
+          containerRef.current.innerHTML = svg;
+          const svgEl = containerRef.current.querySelector('svg');
+          if (svgEl) {
+            svgEl.style.maxWidth = '100%';
+            svgEl.style.height = 'auto';
+            svgEl.removeAttribute('width');
+            svgEl.removeAttribute('height');
+          }
+        }
+      } catch (err) {
+        console.error('[MermaidDiagram] render error:', err);
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [chart]);
+
+  if (!chart) {
+    return (
+      <div className="flex items-center justify-center w-full min-h-[500px]">
+        <div className="text-center">
+          <p className="text-gray-500 text-sm">No diagram available</p>
+          <p className="text-gray-600 text-xs mt-1">Generate a schema to preview ERD</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center w-full min-h-[500px]">
+        <div className="text-center">
+          <div className="text-4xl mb-3">⚠️</div>
+          <p className="text-gray-500 text-sm mb-1">Failed to render diagram</p>
+          <p className="text-gray-600 text-xs font-mono">Check console for details</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full min-h-[500px] flex items-start justify-center p-10">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+            Rendering ERD...
+          </div>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="w-full"
+        style={{ opacity: loading ? 0 : 1, transition: 'opacity 0.3s ease' }}
+      />
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ResultsPage() {
   const router = useRouter();
   const [code, setCode] = useState<GeneratedCode>({
@@ -47,8 +183,6 @@ export default function ResultsPage() {
     Docs: true,
   });
   const [dbType, setDbType] = useState('postgresql');
-
-  // ─── Derived content (shared between explorer + ZIP) ─────────────────────────
 
   const modelNames = code.prismaSchema
     .match(/model\s+(\w+)\s*\{/g)
@@ -294,74 +428,67 @@ ${endpointsList}
 *Generated with [Foundry](https://github.com/foundry) in under 60 seconds.*
 `;
 
-  // ─── File Explorer Groups — 1:1 with ZIP ─────────────────────────────────────
-
   const files: FileGroup[] = [
     {
       group: 'Database',
       icon: '🗄️',
       items: [
-        { id: 'schema',  name: 'schema.prisma',     language: 'prisma',     content: code.prismaSchema },
-        { id: 'seed',    name: 'prisma/seed.ts',     language: 'typescript', content: code.seedScript },
+        { id: 'schema', name: 'schema.prisma',  language: 'prisma',     content: code.prismaSchema },
+        { id: 'seed',   name: 'prisma/seed.ts', language: 'typescript', content: code.seedScript },
       ],
     },
     {
       group: 'Backend',
       icon: '⚡',
       items: [
-        { id: 'routes',  name: 'routes.ts',              language: 'typescript', content: code.apiRoutes },
-        { id: 'zod',     name: 'schemas/validation.ts',  language: 'typescript', content: code.zodSchemas },
-        { id: 'types',   name: 'types.ts',               language: 'typescript', content: typesTs,         readOnly: true },
-        { id: 'health',  name: 'app/api/health/route.ts', language: 'typescript', content: healthRouteTs,   readOnly: true },
+        { id: 'routes', name: 'routes.ts',               language: 'typescript', content: code.apiRoutes },
+        { id: 'zod',    name: 'schemas/validation.ts',   language: 'typescript', content: code.zodSchemas },
+        { id: 'types',  name: 'types.ts',                language: 'typescript', content: typesTs,       readOnly: true },
+        { id: 'health', name: 'app/api/health/route.ts', language: 'typescript', content: healthRouteTs, readOnly: true },
       ],
     },
     {
       group: 'Config',
       icon: '⚙️',
       items: [
-        { id: 'prismaClient', name: 'lib/prisma.ts',  language: 'typescript', content: prismaClientTs,                              readOnly: true },
-        { id: 'env',          name: '.env.example',   language: 'plaintext',  content: envExamples[dbType] || envExamples.postgresql, readOnly: true },
-        { id: 'gitignore',    name: '.gitignore',     language: 'plaintext',  content: gitignoreContent,                            readOnly: true },
+        { id: 'prismaClient', name: 'lib/prisma.ts', language: 'typescript', content: prismaClientTs,                               readOnly: true },
+        { id: 'env',          name: '.env.example',  language: 'plaintext',  content: envExamples[dbType] || envExamples.postgresql, readOnly: true },
+        { id: 'gitignore',    name: '.gitignore',    language: 'plaintext',  content: gitignoreContent,                             readOnly: true },
       ],
     },
     {
       group: 'DevOps',
       icon: '🐳',
       items: [
-        { id: 'docker',     name: 'docker-compose.yml',         language: 'yaml', content: dockerComposeMap[dbType] || dockerComposeMap.postgresql, readOnly: true },
-        { id: 'dockerfile', name: 'Dockerfile',                  language: 'dockerfile', content: dockerfileContent,                              readOnly: true },
-        { id: 'ci',         name: '.github/workflows/ci.yml',    language: 'yaml', content: ciYml,                                               readOnly: true },
+        { id: 'docker',     name: 'docker-compose.yml',       language: 'yaml',       content: dockerComposeMap[dbType] || dockerComposeMap.postgresql, readOnly: true },
+        { id: 'dockerfile', name: 'Dockerfile',                language: 'dockerfile', content: dockerfileContent,                                      readOnly: true },
+        { id: 'ci',         name: '.github/workflows/ci.yml', language: 'yaml',       content: ciYml,                                                  readOnly: true },
       ],
     },
     {
       group: 'Docs',
       icon: '📄',
       items: [
-        { id: 'readme',   name: 'README.md',                language: 'markdown', content: readmeContent,      readOnly: true },
-        { id: 'postman',  name: 'postman_collection.json',  language: 'json',     content: postmanCollection,  readOnly: true },
+        { id: 'readme',  name: 'README.md',               language: 'markdown', content: readmeContent,     readOnly: true },
+        { id: 'postman', name: 'postman_collection.json', language: 'json',     content: postmanCollection, readOnly: true },
       ],
     },
   ];
 
   const [selectedFile, setSelectedFile] = useState<FileItem>(files[0].items[0]);
 
-  // ─── Effects ─────────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const resultsStr = sessionStorage.getItem('erdResults');
-    if (!resultsStr) {
-      router.push('/');
-      return;
-    }
+    if (!resultsStr) { router.push('/'); return; }
     try {
       const results = JSON.parse(resultsStr);
       setDbType(results.dbType || 'postgresql');
       setCode({
-        prismaSchema: results.prismaSchema || '// Schema will be generated here',
-        apiRoutes: results.apiRoutes || '// API routes will be generated here',
+        prismaSchema:   results.prismaSchema   || '// Schema will be generated here',
+        apiRoutes:      results.apiRoutes      || '// API routes will be generated here',
         mermaidDiagram: results.mermaidDiagram || '',
-        zodSchemas: results.zodSchemas || '// Zod schemas will be generated here',
-        seedScript: results.seedScript || '// Seed script will be generated here',
+        zodSchemas:     results.zodSchemas     || '// Zod schemas will be generated here',
+        seedScript:     results.seedScript     || '// Seed script will be generated here',
       });
     } catch (error) {
       console.error('Failed to parse results:', error);
@@ -369,7 +496,6 @@ ${endpointsList}
     }
   }, [router]);
 
-  // Sync selectedFile content when code or dbType changes
   useEffect(() => {
     setSelectedFile((prev) => {
       const allItems = files.flatMap((g) => g.items);
@@ -378,8 +504,6 @@ ${endpointsList}
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, dbType]);
-
-  // ─── Handlers ────────────────────────────────────────────────────────────────
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(selectedFile.content);
@@ -400,22 +524,20 @@ ${endpointsList}
   const handleDownloadAll = async () => {
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();
-
-    zip.file('schema.prisma',               code.prismaSchema);
-    zip.file('lib/prisma.ts',               prismaClientTs);
-    zip.file('routes.ts',                   code.apiRoutes);
-    zip.file('types.ts',                    typesTs);
-    zip.file('schemas/validation.ts',       code.zodSchemas || '// Zod schemas');
-    zip.file('prisma/seed.ts',              code.seedScript || '// Seed script');
-    zip.file('postman_collection.json',     postmanCollection);
-    zip.file('.github/workflows/ci.yml',    ciYml);
-    zip.file('Dockerfile',                  dockerfileContent);
-    zip.file('docker-compose.yml',          dockerComposeMap[dbType] || dockerComposeMap.postgresql);
-    zip.file('.env.example',                envExamples[dbType] || envExamples.postgresql);
-    zip.file('.gitignore',                  gitignoreContent);
-    zip.file('app/api/health/route.ts',     healthRouteTs);
-    zip.file('README.md',                   readmeContent);
-
+    zip.file('schema.prisma',            code.prismaSchema);
+    zip.file('lib/prisma.ts',            prismaClientTs);
+    zip.file('routes.ts',                code.apiRoutes);
+    zip.file('types.ts',                 typesTs);
+    zip.file('schemas/validation.ts',    code.zodSchemas || '// Zod schemas');
+    zip.file('prisma/seed.ts',           code.seedScript || '// Seed script');
+    zip.file('postman_collection.json',  postmanCollection);
+    zip.file('.github/workflows/ci.yml', ciYml);
+    zip.file('Dockerfile',               dockerfileContent);
+    zip.file('docker-compose.yml',       dockerComposeMap[dbType] || dockerComposeMap.postgresql);
+    zip.file('.env.example',             envExamples[dbType] || envExamples.postgresql);
+    zip.file('.gitignore',               gitignoreContent);
+    zip.file('app/api/health/route.ts',  healthRouteTs);
+    zip.file('README.md',                readmeContent);
     const content = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(content);
     const a = document.createElement('a');
@@ -427,215 +549,119 @@ ${endpointsList}
     URL.revokeObjectURL(url);
   };
 
-  const toggleGroup = (group: string) => {
+  const toggleGroup = (group: string) =>
     setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
-  };
 
   const fileIcon = (item: FileItem): string => {
     const name = item.name;
-    if (name.endsWith('.prisma'))   return '🟦';
-    if (name.endsWith('.json'))     return '🟫';
+    if (name.endsWith('.prisma'))                        return '🟦';
+    if (name.endsWith('.json'))                           return '🟫';
     if (name.endsWith('.yml') || name.endsWith('.yaml')) return '🟧';
-    if (name.endsWith('.md'))       return '📝';
-    if (name === 'Dockerfile')      return '🐳';
-    if (name.startsWith('.'))       return '⚙️';
+    if (name.endsWith('.md'))                             return '📝';
+    if (name === 'Dockerfile')                            return '🐳';
+    if (name.startsWith('.'))                             return '⚙️';
     return '🟨';
   };
-
-  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-[#0d0d0f] flex flex-col">
 
-  {/* Header */}
-  <header className="flex-shrink-0 border-b border-white/10 bg-black/40 backdrop-blur-2xl z-10 relative overflow-hidden">
-
-    {/* Gradient Overlay */}
-    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none" />
-
-    <div className="container mx-auto px-6 py-4 flex items-center justify-between relative z-10">
-
-      {/* Back Button */}
-      <button
-        onClick={() => router.push('/')}
-        className="flex items-center gap-2 text-gray-500 hover:text-white transition-all duration-200 text-sm hover:translate-x-[-2px]"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back
-      </button>
-
-      {/* Logo + Branding */}
-      <div className="flex items-center gap-3">
-
-        {/* Logo Container */}
-        <div className="relative group">
-
-          {/* Glow */}
-          <div className="absolute inset-0 bg-blue-500/30 blur-xl rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
-
-          {/* Logo */}
-          <div className="relative w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center backdrop-blur-xl shadow-lg shadow-blue-500/10">
-
-            <Image
-              src="/asset/logo.png"
-              alt="Foundry Logo"
-              width={28}
-              height={28}
-              className="object-contain"
-              priority
-            />
-          </div>
-        </div>
-
-        {/* Text */}
-        <div className="flex flex-col leading-tight">
-          <div className="flex items-center gap-2">
-            <span className="text-white font-semibold tracking-wide text-sm">
-              Foundry
-            </span>
-
-            <span className="text-gray-700 text-xs">/</span>
-
-            <span className="text-gray-400 text-sm">
-              Generated Code
-            </span>
-          </div>
-
-          <span className="text-[10px] text-gray-600 tracking-widest uppercase">
-            Powered by watsonx.ai
-          </span>
-        </div>
-      </div>
-
-      {/* Status */}
-      <div className="flex items-center gap-2">
-
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-
-          <span className="text-[11px] text-emerald-300 font-medium">
-            AI Active
-          </span>
-        </div>
-
-      </div>
-    </div>
-  </header>
-
-  {/* Models banner */}
-  {code.prismaSchema && modelNames.length > 0 && (
-    <div className="flex-shrink-0 bg-emerald-500/5 border-b border-emerald-500/15 backdrop-blur-xl">
-      <div className="container mx-auto px-6 py-2.5 flex items-center gap-2 flex-wrap">
-
-        <span className="text-emerald-400 text-xs">✓</span>
-
-        <span className="text-emerald-400 text-xs font-medium">
-          {modelNames.length} models detected:
-        </span>
-
-        <div className="flex gap-1.5 flex-wrap">
-          {modelNames.map((m) => (
-            <span
-              key={m}
-              className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-xs text-emerald-300 font-mono hover:bg-emerald-500/20 transition-colors"
-            >
-              {m}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )}
-
-  {/* Main */}
-  <div className="flex-grow container mx-auto px-6 py-6 flex flex-col gap-6">
-
-    {/* VSCode Workspace */}
-    <div className="grid grid-cols-12 gap-4 min-h-[700px]">
-
-      {/* Explorer Sidebar */}
-      <div className="col-span-2 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col backdrop-blur-xl">
-
-        <div className="px-3 py-3 border-b border-white/5 flex items-center justify-between">
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
-            Explorer
-          </p>
-
-          <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">
-            {files.flatMap((g) => g.items).length} files
-          </span>
-        </div>
-
-        <div className="flex-grow overflow-y-auto py-1">
-          {files.map((group) => (
-            <div key={group.group}>
-
-              <button
-                onClick={() => toggleGroup(group.group)}
-                className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-widest hover:text-gray-300 transition-colors"
-              >
-                <ChevronDown
-                  className={`w-3 h-3 transition-transform flex-shrink-0 ${
-                    openGroups[group.group] ? '' : '-rotate-90'
-                  }`}
-                />
-
-                <span>{group.icon}</span>
-
-                {group.group}
-              </button>
-
-              {openGroups[group.group] &&
-                group.items.map((file) => (
-                  <button
-                    key={file.id}
-                    onClick={() => setSelectedFile(file)}
-                    className={`relative overflow-hidden w-full flex items-center gap-1.5 pl-7 pr-2 py-1 text-left transition-all duration-200 ${
-                      selectedFile.id === file.id
-                        ? 'bg-blue-500/15 text-blue-300'
-                        : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03] hover:translate-x-[2px]'
-                    }`}
-                  >
-
-                    {/* Active Indicator */}
-                    {selectedFile.id === file.id && (
-                      <div className="absolute left-0 top-0 h-full w-[2px] bg-blue-400" />
-                    )}
-
-                    <span className="text-sm leading-none flex-shrink-0">
-                      {fileIcon(file)}
-                    </span>
-
-                    <span className="truncate font-mono text-[11px]">
-                      {file.name.split('/').pop()}
-                    </span>
-
-                    {file.readOnly && (
-                      <span className="ml-auto text-[9px] text-gray-700 flex-shrink-0">
-                        ro
-                      </span>
-                    )}
-                  </button>
-                ))}
+      {/* Header */}
+      <header className="flex-shrink-0 border-b border-white/10 bg-black/40 backdrop-blur-2xl z-10 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none" />
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between relative z-10">
+          <button onClick={() => router.push('/')} className="flex items-center gap-2 text-gray-500 hover:text-white transition-all duration-200 text-sm hover:translate-x-[-2px]">
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative group">
+              <div className="absolute inset-0 bg-blue-500/30 blur-xl rounded-full opacity-70 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="relative w-10 h-10 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center backdrop-blur-xl shadow-lg shadow-blue-500/10">
+                <Image src="/asset/logo.png" alt="Foundry Logo" width={28} height={28} className="object-contain" priority />
+              </div>
             </div>
-          ))}
+            <div className="flex flex-col leading-tight">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold tracking-wide text-sm">Foundry</span>
+                <span className="text-gray-700 text-xs">/</span>
+                <span className="text-gray-400 text-sm">Generated Code</span>
+              </div>
+              <span className="text-[10px] text-gray-600 tracking-widest uppercase">Powered by watsonx.ai</span>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] text-emerald-300 font-medium">AI Active</span>
+          </div>
         </div>
-      </div>
+      </header>
 
-          {/* ── Editor ── */}
+      {/* Models banner */}
+      {code.prismaSchema && modelNames.length > 0 && (
+        <div className="flex-shrink-0 bg-emerald-500/5 border-b border-emerald-500/15 backdrop-blur-xl">
+          <div className="container mx-auto px-6 py-2.5 flex items-center gap-2 flex-wrap">
+            <span className="text-emerald-400 text-xs">✓</span>
+            <span className="text-emerald-400 text-xs font-medium">{modelNames.length} models detected:</span>
+            <div className="flex gap-1.5 flex-wrap">
+              {modelNames.map((m) => (
+                <span key={m} className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-xs text-emerald-300 font-mono hover:bg-emerald-500/20 transition-colors">
+                  {m}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main */}
+      <div className="flex-grow container mx-auto px-6 py-6 flex flex-col gap-6">
+
+        {/* VSCode Workspace */}
+        <div className="grid grid-cols-12 gap-4 min-h-[700px]">
+
+          {/* Explorer */}
+          <div className="col-span-2 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col backdrop-blur-xl">
+            <div className="px-3 py-3 border-b border-white/5 flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">Explorer</p>
+              <span className="text-[10px] text-gray-600 bg-white/5 px-1.5 py-0.5 rounded">{files.flatMap((g) => g.items).length} files</span>
+            </div>
+            <div className="flex-grow overflow-y-auto py-1">
+              {files.map((group) => (
+                <div key={group.group}>
+                  <button onClick={() => toggleGroup(group.group)} className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-widest hover:text-gray-300 transition-colors">
+                    <ChevronDown className={`w-3 h-3 transition-transform flex-shrink-0 ${openGroups[group.group] ? '' : '-rotate-90'}`} />
+                    <span>{group.icon}</span>
+                    {group.group}
+                  </button>
+                  {openGroups[group.group] && group.items.map((file) => (
+                    <button
+                      key={file.id}
+                      onClick={() => setSelectedFile(file)}
+                      className={`relative overflow-hidden w-full flex items-center gap-1.5 pl-7 pr-2 py-1 text-left transition-all duration-200 ${
+                        selectedFile.id === file.id ? 'bg-blue-500/15 text-blue-300' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03] hover:translate-x-[2px]'
+                      }`}
+                    >
+                      {selectedFile.id === file.id && <div className="absolute left-0 top-0 h-full w-[2px] bg-blue-400" />}
+                      <span className="text-sm leading-none flex-shrink-0">{fileIcon(file)}</span>
+                      <span className="truncate font-mono text-[11px]">{file.name.split('/').pop()}</span>
+                      {file.readOnly && <span className="ml-auto text-[9px] text-gray-700 flex-shrink-0">ro</span>}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Editor */}
           <div className="col-span-6 bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden flex flex-col">
-            {/* Tab bar */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5 flex-shrink-0 gap-3">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base leading-none flex-shrink-0">{fileIcon(selectedFile)}</span>
                 <span className="text-xs text-gray-300 font-mono truncate">{selectedFile.name}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-gray-500 font-mono flex-shrink-0">
-                  {selectedFile.language}
-                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-gray-500 font-mono flex-shrink-0">{selectedFile.language}</span>
                 {selectedFile.readOnly && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 font-mono flex-shrink-0">
-                    read-only
-                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 font-mono flex-shrink-0">read-only</span>
                 )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -647,8 +673,6 @@ ${endpointsList}
                 </button>
               </div>
             </div>
-
-            {/* Monaco */}
             <div className="flex-grow overflow-hidden">
               <Editor
                 key={selectedFile.id}
@@ -669,7 +693,7 @@ ${endpointsList}
                 onChange={(value) => {
                   if (selectedFile.readOnly) return;
                   const updated = value || '';
-                  if (selectedFile.id === 'schema') setCode((c) => ({ ...c, prismaSchema: updated }));
+                  if (selectedFile.id === 'schema')      setCode((c) => ({ ...c, prismaSchema: updated }));
                   else if (selectedFile.id === 'routes') setCode((c) => ({ ...c, apiRoutes: updated }));
                   else if (selectedFile.id === 'zod')    setCode((c) => ({ ...c, zodSchemas: updated }));
                   else if (selectedFile.id === 'seed')   setCode((c) => ({ ...c, seedScript: updated }));
@@ -678,10 +702,8 @@ ${endpointsList}
             </div>
           </div>
 
-          {/* ── Right Panel ── */}
+          {/* Right Panel */}
           <div className="col-span-4 flex flex-col gap-4">
-
-            {/* Metrics */}
             <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Project Metrics</h3>
               <div className="grid grid-cols-2 gap-3">
@@ -704,22 +726,10 @@ ${endpointsList}
               </div>
             </div>
 
-            {/* Generation Summary — now lists all 10 files */}
             <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Generation Summary</h3>
               <div className="space-y-2 text-xs">
-                {[
-                  'Prisma Schema',
-                  'REST API Routes',
-                  'TypeScript Types',
-                  'Zod Validation',
-                  'Seed Script',
-                  'Prisma Client',
-                  'Docker Setup',
-                  'GitHub CI/CD',
-                  'Postman Collection',
-                  'Health Endpoint',
-                ].map((label) => (
+                {['Prisma Schema','REST API Routes','TypeScript Types','Zod Validation','Seed Script','Prisma Client','Docker Setup','GitHub CI/CD','Postman Collection','Health Endpoint'].map((label) => (
                   <div key={label} className="flex items-center justify-between">
                     <span className="text-gray-400">{label}</span>
                     <span className="text-emerald-400">✓</span>
@@ -728,30 +738,18 @@ ${endpointsList}
               </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
               <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
               <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleDownloadAll}
-                  className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
-                >
+                <button onClick={handleDownloadAll} className="w-full px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2">
                   <span>📦</span> Download All (.zip)
                 </button>
-                <button
-                  onClick={() => router.push('/')}
-                  className="w-full px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-semibold text-sm transition-colors border border-white/10 flex items-center justify-center gap-2"
-                >
+                <button onClick={() => router.push('/')} className="w-full px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-semibold text-sm transition-colors border border-white/10 flex items-center justify-center gap-2">
                   <span>🔄</span> Generate Another
                 </button>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {[
-                  { icon: '🚀', label: 'Deploy Neon' },
-                  { icon: '🐙', label: 'Push GitHub' },
-                  { icon: '🐳', label: 'Docker Deploy' },
-                  { icon: '📄', label: 'API Docs' },
-                ].map(({ icon, label }) => (
+                {[{ icon: '🚀', label: 'Deploy Neon' },{ icon: '🐙', label: 'Push GitHub' },{ icon: '🐳', label: 'Docker Deploy' },{ icon: '📄', label: 'API Docs' }].map(({ icon, label }) => (
                   <button key={label} disabled className="px-2 py-2 bg-white/[0.02] text-gray-600 rounded-lg text-xs border border-white/5 cursor-not-allowed flex items-center justify-center gap-1">
                     {icon} {label}
                     <span className="bg-white/5 px-1 py-0.5 rounded text-[9px] text-gray-600 ml-0.5">Soon</span>
@@ -762,7 +760,7 @@ ${endpointsList}
           </div>
         </div>
 
-        {/* Mermaid ERD */}
+        {/* ✅ ERD — client-side render, no CDN, auto-sanitize AI output */}
         <div className="bg-white/[0.02] rounded-2xl border border-white/10 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
             <div className="flex items-center gap-2">
@@ -784,41 +782,13 @@ ${endpointsList}
           </div>
           <div className="relative bg-[#f8fafc] overflow-auto min-h-[650px] max-h-[900px]">
             <div
-              className="absolute inset-0 opacity-[0.03]"
+              className="absolute inset-0 opacity-[0.03] pointer-events-none"
               style={{
                 backgroundImage: 'linear-gradient(to right, black 1px, transparent 1px), linear-gradient(to bottom, black 1px, transparent 1px)',
                 backgroundSize: '24px 24px',
               }}
             />
-            <div className="relative flex justify-center items-start p-10 min-w-max">
-              {code.mermaidDiagram ? (
-                <img
-                  src={`https://mermaid.ink/svg/${encodeURIComponent(btoa(unescape(encodeURIComponent(code.mermaidDiagram))))}`}
-                  alt="Generated ERD"
-                  className="block w-auto h-auto max-w-none min-w-[1200px] object-contain rounded-xl shadow-2xl border border-gray-200 bg-white p-6"
-                  draggable={false}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
-                    if (fallback) fallback.classList.remove('hidden');
-                  }}
-                />
-              ) : null}
-              <div className="hidden absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-gray-500 text-sm mb-2">Failed to render diagram</p>
-                  <p className="text-gray-400 text-xs font-mono">Mermaid syntax may be invalid</p>
-                </div>
-              </div>
-              {!code.mermaidDiagram && (
-                <div className="flex items-center justify-center w-full min-h-[500px]">
-                  <div className="text-center">
-                    <p className="text-gray-500 text-sm">No diagram available</p>
-                    <p className="text-gray-600 text-xs mt-1">Generate a schema to preview ERD</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            <MermaidDiagram chart={code.mermaidDiagram} />
           </div>
         </div>
       </div>
